@@ -18,3 +18,5 @@ Tested on Python 3.6
 ## Development
 
 If your model uses convolutions, [torch.nn.Conv2d](https://pytorch.org/docs/stable/nn.html#conv2d) expects channels first.
+
+Agent algorithms source: https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail
