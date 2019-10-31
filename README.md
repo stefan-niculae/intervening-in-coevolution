@@ -13,3 +13,8 @@ Tested on Python 3.6
     - the package available in pip (`pip install baselines`) requires a Mujoco license
 2. Python packages `pip install -r requirements.txt`
     - likely has some unused packages in there as well
+
+
+## Development
+
+If your model uses convolutions, [torch.nn.Conv2d](https://pytorch.org/docs/stable/nn.html#conv2d) expects channels first.
