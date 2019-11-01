@@ -23,8 +23,8 @@ def make_env(env_id, seed, rank, log_dir, allow_early_resets):
 
     return _thunk
 
-# TODO make a FlattenObservationWrapper and apply it if (len(observation_shape) > 1 and args.policy_base == 'fc'); and announce it
-# TODO otherwise check that len(observation_shape) == 3 and issue a warning that images are interpreted as channel first
+# TODO create a wrapper for an agent that picks action, and learns from on each avatar that is not `done`
+# TODO either two separate policies or the same policy but with some kind of differentiator between the two teams
 
 class TimeLimitMask(gym.Wrapper):
     """ Checks whether done was caused by time limits """

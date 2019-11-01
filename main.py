@@ -101,3 +101,5 @@ def cleanup_log_dir(log_dir):
 
 if __name__ == "__main__":
     main()
+    """ Test with `--algo=ppo --num-processes=4 --num-mini-batch=16 --num-env-steps=2000 --env-name=CartPole-v1`, 
+        should achieve 88 max reward, 47.9 avg reward """
