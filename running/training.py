@@ -46,6 +46,9 @@ def instantiate(args, device):
                               envs.observation_space.shape, envs.action_space,
                               actor_critic.recurrent_hidden_state_size)
 
+    obs = envs.reset()
+    rollouts.obs[0].copy_(obs)
+
     return envs, actor_critic, agent, rollouts
 
 
@@ -82,9 +85,6 @@ def perform_update(args, envs, actor_critic, agent, rollouts, update_number, n_u
     value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
     rollouts.after_update()
-
-    obs = envs.reset()
-    rollouts.obs[0].copy_(obs)
 
     return value_loss, action_loss, dist_entropy
 
