@@ -1,3 +1,5 @@
+""" Decoupled steps (initialize and update) of the learning process  """
+
 import torch
 
 from environment.vec_env import make_vec_envs
@@ -7,7 +9,7 @@ from agent.storage import RolloutStorage
 
 
 def instantiate(args, device):
-    """ Instantiate the environment, agent, storage """
+    """ Instantiate the environment, policy, agent, storage """
     envs = make_vec_envs(args.env_name, args.seed, args.num_processes,
                          args.gamma, args.log_dir, device, False)
 
@@ -27,6 +29,7 @@ def instantiate(args, device):
             eps=args.optim_eps,
             alpha=args.rmsprop_alpha,
             max_grad_norm=args.max_grad_norm)
+
     elif args.algo == 'ppo':
         agent = PPO(
             actor_critic,
@@ -38,6 +41,7 @@ def instantiate(args, device):
             lr=args.lr,
             eps=args.optim_eps,
             max_grad_norm=args.max_grad_norm)
+
     elif args.algo == 'acktr':
         agent = A2C_ACKTR(
             actor_critic, args.value_loss_coef, args.entropy_coef, acktr=True)
@@ -56,8 +60,8 @@ def perform_update(args, envs, actor_critic, agent, rollouts, update_number, n_u
     """ Runs the agent on the env and updates the model """
     if args.use_linear_lr_decay:
         # decrease learning rate linearly
-        update_linear_schedule(agent.optimizer, update_number, n_updates,
-            agent.optimizer.lr if args.algo == "acktr" else args.lr)
+        decay_lr(agent.optimizer, update_number, n_updates,
+                 agent.optimizer.lr if args.algo == "acktr" else args.lr)
 
     for step in range(args.num_steps):
         # Sample actions
@@ -89,8 +93,8 @@ def perform_update(args, envs, actor_critic, agent, rollouts, update_number, n_u
     return value_loss, action_loss, dist_entropy
 
 
-def update_linear_schedule(optimizer, epoch, total_num_epochs, initial_lr):
-    """Decreases the learning rate linearly"""
+def decay_lr(optimizer, epoch, total_num_epochs, initial_lr):
+    """ Decay the learning rate linearly """
     lr = initial_lr - (initial_lr * (epoch / float(total_num_epochs)))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr

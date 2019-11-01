@@ -1,3 +1,5 @@
+""" Gathers arguments, runs learning steps, defines reporting and other I/O """
+
 import glob
 import os
 import time

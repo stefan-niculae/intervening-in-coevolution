@@ -8,8 +8,7 @@ from environment.vec_env import make_vec_envs
 N_EPISODES = 10
 
 
-def evaluate(actor_critic, ob_rms, env_name, seed, num_processes, eval_log_dir,
-             device):
+def evaluate(actor_critic, ob_rms, env_name, seed, num_processes, eval_log_dir, device):
     eval_envs = make_vec_envs(env_name, seed + num_processes, num_processes,
                               None, eval_log_dir, device, True)
 
@@ -33,7 +32,6 @@ def evaluate(actor_critic, ob_rms, env_name, seed, num_processes, eval_log_dir,
                 eval_masks,
                 deterministic=True)
 
-        # Obser reward and next obs
         obs, _, done, infos = eval_envs.step(action)
 
         eval_masks = torch.tensor(
@@ -47,5 +45,5 @@ def evaluate(actor_critic, ob_rms, env_name, seed, num_processes, eval_log_dir,
 
     eval_envs.close()
 
-    print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
+    print("Evaluation using {} episodes: mean reward {:.5f}\n".format(
         len(eval_episode_rewards), np.mean(eval_episode_rewards)))

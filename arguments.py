@@ -1,3 +1,5 @@
+""" CLI arguments for main.yp """
+
 import argparse
 
 import torch

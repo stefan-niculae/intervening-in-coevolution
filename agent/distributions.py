@@ -1,6 +1,4 @@
-"""
-Modify default PyTorch distributions interfaces to be compatible with this implementation.
-"""
+""" Standardize PyTorch distributions interfaces """
 
 import torch
 import torch.nn as nn

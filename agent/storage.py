@@ -1,3 +1,5 @@
+""" Container for RL traces (env state, action, reward, recurrent state) and returns computation """
+
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
