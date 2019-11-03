@@ -47,10 +47,11 @@ def instantiate(args, device):
             actor_critic, args.value_loss_coef, args.entropy_coef, acktr=True)
 
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
-                              envs.observation_space.shape, envs.action_space,
+                              envs.num_avatars, envs.observation_space.shape, envs.action_space,
                               actor_critic.recurrent_hidden_state_size)
 
     obs = envs.reset()
+    print('obs from reset', obs.shape)
     rollouts.obs[0].copy_(obs)
 
     return envs, actor_critic, agent, rollouts

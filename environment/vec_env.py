@@ -5,7 +5,8 @@ import numpy as np
 import torch
 from baselines.common.vec_env import VecEnvWrapper
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from baselines.common.vec_env.shmem_vec_env import ShmemVecEnv
+from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
+# from baselines.common.vec_env.shmem_vec_env import ShmemVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 
 from environment.utils import make_env
@@ -24,18 +25,25 @@ def make_vec_envs(env_name,
         for i in range(num_processes)
     ]
 
+    dummy_env = envs[0]()
+    if hasattr(dummy_env, 'num_avatars'):
+        num_avatars = dummy_env.num_avatars
+    else:
+        num_avatars = 1
+
     if len(envs) > 1:
-        envs = ShmemVecEnv(envs, context='fork')
+        envs = SubprocVecEnv(envs, context='fork')
     else:
         envs = DummyVecEnv(envs)
 
-    if len(envs.observation_space.shape) == 1:
-        if gamma is None:
-            envs = VecNormalize(envs, ret=False)
-        else:
-            envs = VecNormalize(envs, gamma=gamma)
+    # if len(envs.observation_space.shape) == 1:
+    #     if gamma is None:
+    #         envs = VecNormalize(envs, ret=False)
+    #     else:
+    #         envs = VecNormalize(envs, gamma=gamma)
 
     envs = VecEnv(envs, device)
+    envs.num_avatars = num_avatars
 
     if num_frame_stack is not None:
         envs = VecFrameStack(envs, num_frame_stack, device)
