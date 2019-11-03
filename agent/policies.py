@@ -6,6 +6,7 @@ import torch.nn as nn
 
 from agent.distributions import Bernoulli, Categorical, DiagGaussian
 from agent.utils import init, Flatten
+from gym.spaces import Box, Discrete, MultiBinary
 
 
 class Policy(nn.Module):
@@ -17,21 +18,24 @@ class Policy(nn.Module):
         if base_kind == 'fc':
             base_class = FCBase
         if base_kind == 'conv':
-            base_class= ConvBase
+            base_class = ConvBase
 
         self.base = base_class(obs_shape[0], **base_kwargs)
 
-        if action_space.__class__.__name__ == "Discrete":
+        if isinstance(action_space, Discrete):
             num_outputs = action_space.n
-            self.dist = Categorical(self.base.output_size, num_outputs)
-        elif action_space.__class__.__name__ == "Box":
+            dist_class = Categorical
+        elif isinstance(action_space, Box):
             num_outputs = action_space.shape[0]
-            self.dist = DiagGaussian(self.base.output_size, num_outputs)
-        elif action_space.__class__.__name__ == "MultiBinary":
+            dist_class = DiagGaussian
+        elif isinstance(action_space, MultiBinary):
             num_outputs = action_space.shape[0]
-            self.dist = Bernoulli(self.base.output_size, num_outputs)
+            dist_class = Bernoulli
         else:
             raise NotImplementedError
+
+        self.dist = dist_class(self.base.output_size, num_outputs)
+
 
     @property
     def is_recurrent(self):
@@ -47,7 +51,6 @@ class Policy(nn.Module):
 
     def act(self, inputs, rnn_hxs, masks, deterministic=False):
         """ Pick action """
-        print('act inputs', inputs.shape)
         value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
         dist = self.dist(actor_features)
 
@@ -56,8 +59,23 @@ class Policy(nn.Module):
         else:
             action = dist.sample()
 
-        action_log_probs = dist.log_probs(action)
-        dist_entropy = dist.entropy().mean()
+        # if action.shape[0] == 1:
+        #     # [1, num_processes, num_actors, action_shape] to [num_processes, num_actors, action_shape]
+        #     action = action.squeeze(0)
+        # if action.shape[-1] == 1:
+        #     # when the action is a single number, don't wrap it in a list
+        #     # [num_processes, num_avatars, 1] to [num_processes, num_avatars]
+        #     action = action.squeeze(-1)
+        print(action.shape)
+        action_log_probs = torch.zeros_like(action)
+        num_avatars = action.shape[1]
+        for avatar_number in range(num_avatars):
+            action_log_probs[:, avatar_number] = dist.log_probs(action[:, avatar_number])
+        print('>>>>>', action_log_probs.shape)
+
+        # if action_log_probs.shape[0] == 1:
+        #     # [1, num_processes, num_actors, action_shape] to [num_processes, num_actors, action_shape]
+        #     action_log_probs = action_log_probs.squeeze(0)
 
         return value, action, action_log_probs, rnn_hxs
 

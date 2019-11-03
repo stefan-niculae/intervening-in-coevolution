@@ -2,7 +2,6 @@
 
 import os
 
-import numpy as np
 import gym
 from baselines import bench
 
@@ -11,7 +10,6 @@ from environment.DummyMultiAgentEnv import DummyMultiAgentEnv
 
 def make_env(env_id, seed, rank, log_dir, allow_early_resets):
     def _thunk():
-        # env = DummyMultiAvatarWrapper(gym.make(env_id))  # TODO add our custom env here
         env = DummyMultiAgentEnv(env_id)
         env.seed(seed + rank)
 

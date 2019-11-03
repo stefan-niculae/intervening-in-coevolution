@@ -2,6 +2,7 @@
 
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
+from gym.spaces import Discrete
 
 
 def _flatten_helper(T, N, _tensor):
@@ -17,18 +18,15 @@ class RolloutStorage:
         self.returns                 = torch.zeros(num_steps + 1, num_processes, num_avatars, 1)
         self.action_log_probs        = torch.zeros(num_steps    , num_processes, num_avatars, 1)
 
-        if action_space.__class__.__name__ == 'Discrete':
-            action_shape = 1
+        if isinstance(action_space, Discrete):
+            self.actions = torch.zeros(num_steps, num_processes, num_avatars, 1).long()
         else:
-            action_shape = action_space.shape[0]
-        self.actions = torch.zeros(num_steps, num_processes, action_shape)
-        if action_space.__class__.__name__ == 'Discrete':
-            self.actions = self.actions.long()
-        self.masks = torch.ones(num_steps + 1, num_processes, 1)
+            self.actions = torch.zeros(num_steps, num_processes, num_avatars, *action_space.shape)
 
-        # Masks that indicate whether it's a true terminal state
-        # or time limit end state
+        self.masks = torch.ones(num_steps + 1, num_processes, 1)
+        # Masks that indicate whether it's a true terminal state or time limit end state
         self.bad_masks = torch.ones(num_steps + 1, num_processes, 1)
+        
         self.num_avatars = num_avatars
         self.num_steps = num_steps
         self.step = 0
@@ -49,8 +47,11 @@ class RolloutStorage:
         self.obs                     [self.step + 1].copy_(obs)
         self.recurrent_hidden_states [self.step + 1].copy_(recurrent_hidden_states)
         self.actions                 [self.step    ].copy_(actions)
+        print('want to insert action_log_probs:', action_log_probs.shape)
+        print('into some first index of:', self.action_log_probs.shape)
         self.action_log_probs        [self.step    ].copy_(action_log_probs)
         self.value_preds             [self.step    ].copy_(value_preds)
+        # print('rewards shape', self.rewards.shape)
         self.rewards                 [self.step    ].copy_(rewards)
         self.masks                   [self.step + 1].copy_(masks)
         self.bad_masks               [self.step + 1].copy_(bad_masks)
@@ -121,22 +122,22 @@ class RolloutStorage:
             mini_batch_size,
             drop_last=True)
         for avatar_number in range(self.num_avatars):
-            avatar_slice = slice(None, None, avatar_number)
+            avatar_multislice = slice(None), slice(None), avatar_number
             for indices in sampler:
-                obs_batch = self.obs[avatar_slice][:-1].view(-1, *self.obs.size()[2:])[indices]
-                recurrent_hiddenUMstates_batch = self.recurrent_hiddenUMstates[avatar_slice][:-1].view(-1, self.recurrent_hiddenUMstates.size(-1))[indices]
-                actions_batch = self.actions[avatar_slice].view(-1, self.actions.size(-1))[indices]
-                value_preds_batch = self.value_preds[avatar_slice][:-1].view(-1, 1)[indices]
-                returnUMbatch = self.returns[avatar_slice][:-1].view(-1, 1)[indices]
-                masks_batch = self.masks[avatar_slice][:-1].view(-1, 1)[indices]
-                old_actionUMlog_probs_batch = self.actionUMlog_probs[avatar_slice].view(-1, 1)[indices]
+                obs_batch = self.obs[avatar_multislice][:-1].view(-1, *self.obs.size()[2:])[indices]
+                recurrent_hidden_states_batch = self.recurrent_hidden_states[avatar_multislice][:-1].view(-1, self.recurrent_hidden_states.size(-1))[indices]
+                actions_batch = self.actions[avatar_multislice].view(-1, self.actions.size(-1))[indices]
+                value_preds_batch = self.value_preds[avatar_multislice][:-1].view(-1, 1)[indices]
+                return_batch = self.returns[avatar_multislice][:-1].view(-1, 1)[indices]
+                masks_batch = self.masks[avatar_multislice][:-1].view(-1, 1)[indices]
+                old_action_log_probs_batch = self.action_log_probs[avatar_multislice].view(-1, 1)[indices]
                 if advantages is None:
                     adv_targ = None
                 else:
-                    adv_targ = advantages[avatar_slice].view(-1, 1)[indices]
+                    adv_targ = advantages[avatar_multislice].view(-1, 1)[indices]
 
-                yield obs_batch, recurrent_hiddenUMstates_batch, actions_batch, \
-                    value_preds_batch, returnUMbatch, masks_batch, old_actionUMlog_probs_batch, adv_targ
+                yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
+                    value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ
 
     def recurrent_generator(self, advantages, num_mini_batch):
         num_processes = self.rewards.size(1)

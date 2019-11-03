@@ -51,7 +51,6 @@ def instantiate(args, device):
                               actor_critic.recurrent_hidden_state_size)
 
     obs = envs.reset()
-    print('obs from reset', obs.shape)
     rollouts.obs[0].copy_(obs)
 
     return envs, actor_critic, agent, rollouts
@@ -72,6 +71,7 @@ def perform_update(args, envs, actor_critic, agent, rollouts, update_number, n_u
 
         # Obser reward and next obs
         obs, reward, done, infos = envs.step(action)
+        # print('perform update reward shape', reward.shape)
 
         for info in infos:
             if 'episode' in info.keys():
