@@ -1,6 +1,6 @@
 """ Custom environment """
 
-from gym.spaces import Box
+from gym.spaces import Box, Discrete
 from gym import Env
 import numpy as np
 
@@ -44,9 +44,8 @@ class Hide_and_seek_Env(Env):
     or an Actor (executes for all Agents)
     """
 
-    def __init__(self, width=8, height=8, time_limit=30, n_thieves=2, n_guardians=2, wall_density=0.):
+    def __init__(self, env_id, width=8, height=8, time_limit=30, n_thieves=2, n_guardians=2, wall_density=0.):
         """
-
         Args:
             width: number of horizontal cells
             height: number of vertical cells
@@ -55,6 +54,9 @@ class Hide_and_seek_Env(Env):
             n_guardians:
             wall_density:
         """
+        self.env_id = env_id
+        with open(f'env-{self.env_id}', 'w') as f:
+            f.write('')
         self.width = width
         self.height = height
         self._quadrant_ranges = self.compute_quadrants()
@@ -67,11 +69,15 @@ class Hide_and_seek_Env(Env):
         self.wall_density = wall_density
         self.n_remaining_thieves = self.n_thieves
 
-        self.action_space      = Box(low=0, high=len(action_idx2delta), shape=(self.n_thieves + self.n_guardians,), dtype=int)
-        self.observation_space = Box(low=EMPTY, high=TREASURE, shape=(3, self.height, self.width), dtype=int)
+        self.num_avatars = self.n_thieves + self.n_guardians
+        self.action_space = Discrete(len(action_idx2delta))
+        self.observation_space = Box(low=EMPTY, high=TREASURE, shape=(5, self.width, self.height), dtype=int)
+        self._dummy_dead_state = np.zeros((5, self.width, self.height))
 
+        self.id2team = np.array([THIEF] * self.n_thieves + [GUARDIAN] * self.n_guardians)
+
+        self.avatar_alive = None
         self.map = None
-        self.thieves_alive = None
         self.id2pos = None
         self.pos2id = None
         self.walls_channel = None
@@ -82,11 +88,13 @@ class Hide_and_seek_Env(Env):
         self.elapsed_time = 0
 
         self.map = np.full((self.width, self.height), EMPTY)
-        self.id2pos = {}
+        self.id2pos = {}  # TODO make these two numpy arrays
         self.pos2id = {}
 
         self.generate_positions()
-        self.thieves_alive = self.n_thieves
+        self.avatar_alive = np.ones(self.num_avatars, bool)
+
+        return self.compute_all_states()
 
     def random_cell(self, x_range, y_range) -> (int, int):
         x = np.random.randint(*x_range)
@@ -157,22 +165,32 @@ class Hide_and_seek_Env(Env):
     def in_bounds(self, x, y):
         return 0 <= x < self.width and 0 <= y < self.height
 
-    def step(self, actions: dict):
+    def step(self, actions: [int]):
         """
-        Advance every avatar on the board
-            eg: for 1 thief and 2 guardians, there are 3 actions
+        actions shape: (num_avatars,)
+            one for each avatar, can ignore the actions for dead avatars
 
-        actions: {avatar_id : action_idx}, one for each avatar_id in self.avatar_positions
+        reward shape: (num_avatars,)
+            -inf if the avatar is already dead
+
+        done shape: bool
+            when all are done
+
+        info: dict
+            infos['individual_done']: (num_avatars,)
+
         """
-        reward = {id: 0     for id in self.id2pos}  # one reward for each remaining avatar
-        done    = {id: False for id in self.id2pos}
-        info = []
+        info = {}
+        individual_done = np.zeros(self.num_avatars, bool)
+        reward          = np.zeros(self.num_avatars, float)
+        reward[~self.avatar_alive] = np.float('-inf')
 
-        for avatar_id, old_pos in self.id2pos.items():
-            # Thieves move first, so they'll just die if they encounter a guardian
-            # meaning thieves cannot die before they make their move
+        avatars_alive = self.avatar_alive.nonzero()[0]
+
+        for avatar_id in avatars_alive:
             action_idx = actions[avatar_id]
             delta = action_idx2delta[action_idx]
+            old_pos = self.id2pos[avatar_id]
             new_pos = tuple(old_pos + delta)  # NOTE: make sure self.map[pos] the arg is a tuple, not a (2,) array
 
             # No team can move out of bounds, just ignore the action
@@ -200,8 +218,8 @@ class Hide_and_seek_Env(Env):
 
             # A thief managed to reach the treasure, the game is over, punish all guardians
             if avatar_team == THIEF and new_pos_type == TREASURE:
-                done = {id: True for id in self.id2pos}
-                info.append(f'A thief (id={avatar_id}) reached the treasure')
+                individual_done[:] = True
+                info['end_reason'] = f'A thief (id={avatar_id}) reached the treasure'
 
                 thief_reward, guardian_reward = REWARDS['treasure']
                 reward[avatar_id] += thief_reward
@@ -228,10 +246,9 @@ class Hide_and_seek_Env(Env):
             if avatar_team == THIEF and new_pos_type == GUARDIAN:
                 guardian_id = self.pos2id[new_pos]
 
-                del self.id2pos[avatar_id]
-                del self.pos2id[old_pos]
-                done[avatar_id] = True
-                self.thieves_alive -= 1
+                self.avatar_alive[avatar_id] = False
+                self.id2pos[avatar_id] = None
+                individual_done[avatar_id] = True
                 self.map[old_pos] = EMPTY
 
                 reward[avatar_id]   += thief_reward
@@ -240,12 +257,11 @@ class Hide_and_seek_Env(Env):
 
             # A guardian managed to catch a thief, kill the thief and apply rewards
             if avatar_team == GUARDIAN and new_pos_type == THIEF:
-                thief_id = self.pos2id[new_pos_type]
+                thief_id = self.pos2id[new_pos]
 
-                del self.id2pos[thief_id]
-                del self.pos2id[new_pos]
-                done[thief_id] = True
-                self.thieves_alive -= 1
+                self.avatar_alive[thief_id] = False
+                self.id2pos[thief_id] = None
+                individual_done[thief_id] = True
                 self.map[old_pos] = EMPTY
 
                 reward[thief_id]  += thief_reward
@@ -253,24 +269,35 @@ class Hide_and_seek_Env(Env):
                 continue
 
         # No more thieves alive, the game is over (thieves and guardians have been rewarded at the moments of killing)
-        if self.thieves_alive == 0:
-            info.append('All thieves dead')
-            done = {id: True for id in self.id2pos}
+        if sum(self.avatar_alive) == 0:
+            info['end_reason'] = 'All thieves dead'
+            individual_done[:] = True
 
         self.elapsed_time += 1
         if self.elapsed_time == self.time_limit:
             thief_reward, guardian_reward = REWARDS['out_of_time']
-            info.append('Ran out of time')
+            info['end_reason'] = 'Ran out of time'
 
             # Apply reward to all avatars alive
-            for pos, id in self.pos2id.items():
-                if self.map[pos] == GUARDIAN:
+            for id in avatars_alive:
+                team = self.id2team[id]
+                if team == GUARDIAN:
                     reward[id] += guardian_reward
-                if self.map[pos] == THIEF:
+                if team == THIEF:
                     reward[id] += thief_reward
 
-        state = {id: self.compute_state(id) for id in self.id2pos}
-        return state, reward, done, info
+        state = self.compute_all_states()
+
+        info['individual_done'] = individual_done
+        all_done = all(individual_done)
+        self.render('file')  # TODO: remove (debug)
+        return state, reward, all_done, info
+
+    def compute_all_states(self):
+        return np.stack([
+            self.compute_state(id) if alive else self._dummy_dead_state
+            for id, alive in enumerate(self.avatar_alive)
+        ])
 
     def compute_state(self, for_id):
         """
@@ -282,8 +309,8 @@ class Hide_and_seek_Env(Env):
             5. treasure
         """
         # TODO flat version of the state, but somehow handle the fact that thieves can die; also must have a fixed number of obstacles; and the coordinates should be normalized to (-1, +1) on both x and y axes
-        own_pos = self.id2pos[for_id]
-        own_team = self.map[own_pos]
+        own_pos  = self.id2pos [for_id]
+        own_team = self.id2team[for_id]
         opposing_team = GUARDIAN if own_team == THIEF else THIEF
 
         own = np.zeros_like(self.map, float)
@@ -292,15 +319,15 @@ class Hide_and_seek_Env(Env):
         teammates = np.zeros_like(self.map, float)
         opponents = np.zeros_like(self.map, float)
         for pos, id in self.pos2id.items():
-            if self.map[pos] == own_team:
+            if self.id2team[id] == own_team:
                 teammates[pos] = 1
-            if self.map[pos] == opposing_team:
+            if self.id2team[id] == opposing_team:
                 opponents[pos] = 1
 
         # Channels first
         return np.stack([own, teammates, opponents, self.walls_channel, self.treasure_channel])
 
-    def render(self, mode='matrix'):
+    def render(self, mode='print'):
         CELL_TYPE2LETTER = {
             EMPTY:    '·',
             WALL:     '□',
@@ -309,10 +336,18 @@ class Hide_and_seek_Env(Env):
             TREASURE: '☆',
         }
 
+        s = ''
         for row in self.map:
             for cell in row:
-                print(CELL_TYPE2LETTER[cell], end=' ')
-            print()
+                s += CELL_TYPE2LETTER[cell] + ' '
+            s += '\n'
+
+        if mode == 'print':
+            print(s)
+
+        if mode == 'file':
+            with open(f'env-{self.env_id}', 'a') as f:
+                f.write(s + '\n\n')
 
         # TODO matplotlib grid plot (EMPTY: white, WALL: grey, GOAL: yellow, THIEF: red, GUARDIAN: blue) with the id of the thief/guardian written in the middle of the respective cells; also compatible with the MonitorEnvWrapper that creates short videos (like in the homework)
 

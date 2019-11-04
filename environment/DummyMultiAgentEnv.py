@@ -20,7 +20,7 @@ class DummyMultiAgentEnv(Env):
         self.action_space      = Discrete(2)
         # TODO it's Discrete, not Box for our thief&guardian env!!!!
         # each of them move between -10 and +10, and also have an id of either -1 or +1
-        self.observation_space = Box(low=-10, high=+10, shape=(4,), dtype=int)
+        self.observation_space = Box(low=-10, high=+10, shape=(9, 32, 32), dtype=int)
         self.reward_range = (0, 10)
 
         self.time_limit = 50
@@ -31,11 +31,12 @@ class DummyMultiAgentEnv(Env):
 
     def compute_state(self):
         """ state shape: (num_avatars, 2) """
-        p1, p2 = self.positions
-        return np.array([
-            [+1, p1,0,0],
-            [-1, p2,0,0],
-        ])
+        return np.zeros((2, 9, 32, 32))
+        # p1, p2 = self.positions
+        # return np.array([
+        #     [+1, p1,0,0],
+        #     [-1, p2,0,0],
+        # ])
 
     def reset(self):
         self.positions = np.zeros(2)

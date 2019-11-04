@@ -7,12 +7,13 @@ import gym
 from baselines import bench
 
 from environment.DummyMultiAgentEnv import DummyMultiAgentEnv
+from environment.Hide_and_seek_Env import Hide_and_seek_Env
 
 
-def make_env(env_id, seed, rank, log_dir, allow_early_resets):
+def make_env(env_name, seed, env_id, log_dir, allow_early_resets):
     def _thunk():
-        env = DummyMultiAgentEnv(env_id)
-        env.seed(seed + rank)
+        env = Hide_and_seek_Env(env_id)
+        env.seed(seed + env_id)
 
         # TODO understand what's happening with 'bad_transition' in main.py, and consider using this, by adding to our Env_max_episode_steps and _elapsed_steps to use this
         # env = TimeLimitMask(env)
@@ -21,7 +22,7 @@ def make_env(env_id, seed, rank, log_dir, allow_early_resets):
         if log_dir is not None:
             env = MultiAgentMonitor(
                 env,
-                os.path.join(log_dir, str(rank)),
+                os.path.join(log_dir, str(env_id)),
                 allow_early_resets=allow_early_resets)
         return env
 

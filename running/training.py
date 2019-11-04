@@ -66,8 +66,8 @@ def perform_update(args, envs, actor_critic, agent, rollouts, update_number, n_u
     for step in range(args.num_steps):
         # Sample actions
         with torch.no_grad():
-            value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(rollouts.obs[step],
-                rollouts.recurrent_hidden_states[step], rollouts.masks[step])
+            value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(
+                rollouts.obs[step], rollouts.recurrent_hidden_states[step], rollouts.masks[step])
 
         # Simulate the environment
         obs, reward, all_done, infos = envs.step(action)
@@ -78,7 +78,6 @@ def perform_update(args, envs, actor_critic, agent, rollouts, update_number, n_u
                 # TODO do this for our custom env
                 episode_rewards.append(info['episode']['r'])
 
-        # If done then clean the history of observations.
         masks = torch.FloatTensor([i['individual_done'] for i in infos])
         masks.unsqueeze_(-1)
 

@@ -168,30 +168,57 @@ class NNBase(nn.Module):
 class ConvBase(NNBase):
     def __init__(self, num_inputs, recurrent=False, hidden_size=512):
         super().__init__(recurrent, hidden_size, hidden_size)
-
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0), nn.init.calculate_gain('relu'))
+        init_ = lambda m: init(
+            m,
+            nn.init.orthogonal_,
+            lambda x: nn.init.constant_(x, 0),
+            nn.init.calculate_gain('relu'))
 
         self.main = nn.Sequential(
-            init_(nn.Conv2d(num_inputs, 32, 8, stride=4)), nn.ReLU(),
-            init_(nn.Conv2d(32, 64, 4, stride=2)), nn.ReLU(),
-            init_(nn.Conv2d(64, 32, 3, stride=1)), nn.ReLU(), Flatten(),
-            init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
+            init_(nn.Conv2d(num_inputs, 32, 8, stride=1)), nn.ReLU(),
+            # init_(nn.Conv2d(32, 64, 4, stride=2)), nn.ReLU(),
+            # init_(nn.Conv2d(64, 32, 3, stride=1)), nn.ReLU(),
+            Flatten(),
+            init_(nn.Linear(32, hidden_size)), nn.ReLU())
 
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0))
+        init_ = lambda m: init(
+            m,
+            nn.init.orthogonal_,
+            lambda x: nn.init.constant_(x, 0))
 
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 
         self.train()  # set module in training mode
 
     def forward(self, inputs, rnn_hxs, masks):
-        x = self.main(inputs / 255.0)
+        first_two_dims = None
+        if len(inputs.shape) == 5:
+            first_two_dims = inputs.shape[:2]
+            # [num_processes, num_avatars, C, W, H] to [num_processes * num_avatars, C, W, H]
+            inputs  = combine_first_axes(inputs)
+            rnn_hxs = combine_first_axes(rnn_hxs)
+            masks   = combine_first_axes(masks)
+
+        # print('infinite inputs', (~torch.isfinite(inputs)).sum())
+        x = self.main(inputs)
+        # x[x != x] = 0  # FIXME why are there nans?
+        print('nan entries in output', torch.isnan(x).sum())
 
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
 
-        return self.critic_linear(x), x, rnn_hxs
+        value = self.critic_linear(x)
+
+        if first_two_dims:
+            value   = value.view   (*first_two_dims, *value.shape[1:])
+            x       = x.view       (*first_two_dims, *x.shape[1:])
+            rnn_hxs = rnn_hxs.view (*first_two_dims, *rnn_hxs.shape[1:])
+
+        return value, x, rnn_hxs
+
+
+def combine_first_axes(tensor, n_axes=2):
+    return tensor.view(-1, *tensor.shape[n_axes:])
 
 
 class FCBase(NNBase):
@@ -201,8 +228,12 @@ class FCBase(NNBase):
         if recurrent:
             num_inputs = hidden_size
 
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0), np.sqrt(2))
+        init_ = lambda m: init(
+            m,
+            nn.init.orthogonal_,
+            lambda x: nn.init.
+            constant_(x, 0),
+            np.sqrt(2))
 
         self.actor = nn.Sequential(
             init_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),
