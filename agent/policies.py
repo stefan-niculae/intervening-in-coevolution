@@ -59,23 +59,7 @@ class Policy(nn.Module):
         else:
             action = dist.sample()
 
-        # if action.shape[0] == 1:
-        #     # [1, num_processes, num_actors, action_shape] to [num_processes, num_actors, action_shape]
-        #     action = action.squeeze(0)
-        # if action.shape[-1] == 1:
-        #     # when the action is a single number, don't wrap it in a list
-        #     # [num_processes, num_avatars, 1] to [num_processes, num_avatars]
-        #     action = action.squeeze(-1)
-        print(action.shape)
-        action_log_probs = torch.zeros_like(action)
-        num_avatars = action.shape[1]
-        for avatar_number in range(num_avatars):
-            action_log_probs[:, avatar_number] = dist.log_probs(action[:, avatar_number])
-        print('>>>>>', action_log_probs.shape)
-
-        # if action_log_probs.shape[0] == 1:
-        #     # [1, num_processes, num_actors, action_shape] to [num_processes, num_actors, action_shape]
-        #     action_log_probs = action_log_probs.squeeze(0)
+        action_log_probs = dist.log_probs(action)
 
         return value, action, action_log_probs, rnn_hxs
 

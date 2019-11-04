@@ -48,7 +48,7 @@ def instantiate(args, device):
 
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
                               envs.num_avatars, envs.observation_space.shape, envs.action_space,
-                              actor_critic.recurrent_hidden_state_size)
+                              actor_critic.recurrent_hidden_state_size, args.use_proper_time_limits)
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
@@ -69,23 +69,29 @@ def perform_update(args, envs, actor_critic, agent, rollouts, update_number, n_u
             value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(rollouts.obs[step],
                 rollouts.recurrent_hidden_states[step], rollouts.masks[step])
 
-        # Obser reward and next obs
-        obs, reward, done, infos = envs.step(action)
-        # print('perform update reward shape', reward.shape)
+        # Simulate the environment
+        obs, reward, all_done, infos = envs.step(action)
+        reward = torch.transpose(reward, 1, 2)
 
         for info in infos:
             if 'episode' in info.keys():
+                # TODO do this for our custom env
                 episode_rewards.append(info['episode']['r'])
 
         # If done then clean the history of observations.
-        masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in done])
-        bad_masks = torch.FloatTensor([[0.0] if 'bad_transition' in info.keys() else [1.0] for info in infos])
+        masks = torch.FloatTensor([i['individual_done'] for i in infos])
+        masks.unsqueeze_(-1)
+
+        if args.use_proper_time_limits:
+            bad_masks = torch.FloatTensor([[0] if 'bad_transition' in i else [1] for i in infos])
+        else:
+            bad_masks = None
         rollouts.insert(obs, recurrent_hidden_states, action, action_log_prob, value, reward, masks, bad_masks)
 
     with torch.no_grad():
         next_value = actor_critic.get_value(rollouts.obs[-1], rollouts.recurrent_hidden_states[-1], rollouts.masks[-1]).detach()
 
-    rollouts.compute_returns(next_value, args.use_gae, args.gamma, args.gae_lambda, args.use_proper_time_limits)
+    rollouts.compute_returns(next_value, args.use_gae, args.gamma, args.gae_lambda)
 
     value_loss, action_loss, dist_entropy = agent.update(rollouts)
 

@@ -1,6 +1,7 @@
 """ Functions to instantiate and handle environments """
 
 import os
+import time
 
 import gym
 from baselines import bench
@@ -16,14 +17,38 @@ def make_env(env_id, seed, rank, log_dir, allow_early_resets):
         # TODO understand what's happening with 'bad_transition' in main.py, and consider using this, by adding to our Env_max_episode_steps and _elapsed_steps to use this
         # env = TimeLimitMask(env)
 
+        # TODO implement custom monitor, with vectorized reward
         if log_dir is not None:
-            env = bench.Monitor(
+            env = MultiAgentMonitor(
                 env,
                 os.path.join(log_dir, str(rank)),
                 allow_early_resets=allow_early_resets)
         return env
 
     return _thunk
+
+
+class MultiAgentMonitor(bench.Monitor):
+    def update(self, ob, rew, done, info):
+        self.rewards.append(rew)
+        if done:
+            self.needs_reset = True
+            eprew = sum(self.rewards)
+            eplen = len(self.rewards)
+            epinfo = {"r": eprew, "l": eplen, "t": round(time.time() - self.tstart, 6)}
+            for k in self.info_keywords:
+                epinfo[k] = info[k]
+            self.episode_rewards.append(eprew)
+            self.episode_lengths.append(eplen)
+            self.episode_times.append(time.time() - self.tstart)
+            epinfo.update(self.current_reset_info)
+            if self.results_writer:
+                self.results_writer.write_row(epinfo)
+            assert isinstance(info, dict)
+            if isinstance(info, dict):
+                info['episode'] = epinfo
+
+        self.total_steps += 1
 
 
 # class DummyMultiAvatarWrapper(gym.Wrapper):

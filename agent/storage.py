@@ -10,7 +10,7 @@ def _flatten_helper(T, N, _tensor):
 
 
 class RolloutStorage:
-    def __init__(self, num_steps, num_processes, num_avatars, obs_shape, action_space, recurrent_hidden_state_size):
+    def __init__(self, num_steps, num_processes, num_avatars, obs_shape, action_space, recurrent_hidden_state_size, use_proper_time_limits):
         self.obs                     = torch.zeros(num_steps + 1, num_processes, num_avatars, *obs_shape)
         self.recurrent_hidden_states = torch.zeros(num_steps + 1, num_processes, num_avatars, recurrent_hidden_state_size)
         self.rewards                 = torch.zeros(num_steps    , num_processes, num_avatars, 1)
@@ -23,13 +23,15 @@ class RolloutStorage:
         else:
             self.actions = torch.zeros(num_steps, num_processes, num_avatars, *action_space.shape)
 
-        self.masks = torch.ones(num_steps + 1, num_processes, 1)
+        self.masks = torch.ones(num_steps + 1, num_processes, num_avatars, 1)
         # Masks that indicate whether it's a true terminal state or time limit end state
         self.bad_masks = torch.ones(num_steps + 1, num_processes, 1)
         
         self.num_avatars = num_avatars
         self.num_steps = num_steps
         self.step = 0
+
+        self.use_proper_time_limits = use_proper_time_limits
 
     def to(self, device):
         self.obs                     = self.obs                      .to(device)
@@ -47,14 +49,13 @@ class RolloutStorage:
         self.obs                     [self.step + 1].copy_(obs)
         self.recurrent_hidden_states [self.step + 1].copy_(recurrent_hidden_states)
         self.actions                 [self.step    ].copy_(actions)
-        print('want to insert action_log_probs:', action_log_probs.shape)
-        print('into some first index of:', self.action_log_probs.shape)
         self.action_log_probs        [self.step    ].copy_(action_log_probs)
         self.value_preds             [self.step    ].copy_(value_preds)
-        # print('rewards shape', self.rewards.shape)
         self.rewards                 [self.step    ].copy_(rewards)
         self.masks                   [self.step + 1].copy_(masks)
-        self.bad_masks               [self.step + 1].copy_(bad_masks)
+
+        if self.use_proper_time_limits:
+            self.bad_masks               [self.step + 1].copy_(bad_masks)
 
         self.step = (self.step + 1) % self.num_steps
 
@@ -68,9 +69,8 @@ class RolloutStorage:
                         next_value,
                         use_gae,
                         gamma,
-                        gae_lambda,
-                        use_proper_time_limits=True):
-        if use_proper_time_limits:
+                        gae_lambda):
+        if self.use_proper_time_limits:
             if use_gae:
                 self.value_preds[-1] = next_value
                 gae = 0
@@ -124,7 +124,7 @@ class RolloutStorage:
         for avatar_number in range(self.num_avatars):
             avatar_multislice = slice(None), slice(None), avatar_number
             for indices in sampler:
-                obs_batch = self.obs[avatar_multislice][:-1].view(-1, *self.obs.size()[2:])[indices]
+                obs_batch = self.obs[avatar_multislice][:-1].view(-1, *self.obs.size()[3:])[indices]
                 recurrent_hidden_states_batch = self.recurrent_hidden_states[avatar_multislice][:-1].view(-1, self.recurrent_hidden_states.size(-1))[indices]
                 actions_batch = self.actions[avatar_multislice].view(-1, self.actions.size(-1))[indices]
                 value_preds_batch = self.value_preds[avatar_multislice][:-1].view(-1, 1)[indices]

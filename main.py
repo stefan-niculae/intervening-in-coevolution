@@ -79,11 +79,13 @@ def log_progress(args, update_number, episode_rewards, time_elapsed,
     print(f"Updates {update_number}, \t"
           f"Timesteps {total_num_steps}, \t"
           f"FPS {int(total_num_steps / time_elapsed)}")
+
+    multi_sided_rewards = np.array(episode_rewards)
     print(f"Last {len(episode_rewards)} episodes reward: "
-          f"min {min(episode_rewards):.1f}, \t"
-          f"median {np.median(episode_rewards):.1f}, \t"
-          f"avg {np.mean(episode_rewards):.1f}, \t"
-          f"max {max(episode_rewards):.1f}")
+          f"min {np.min(multi_sided_rewards, axis=0)}, \t"
+          f"median {np.median(multi_sided_rewards, axis=0)}, \t"
+          f"avg {np.mean(multi_sided_rewards, axis=0)}, \t"
+          f"max {np.max(multi_sided_rewards, axis=0)}")
     print(f"value loss {value_loss:.2f}, \t"
           f"action loss {action_loss:.2f}, \t"
           f"entropy {dist_entropy:.2f}")
