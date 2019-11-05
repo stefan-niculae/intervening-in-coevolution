@@ -191,6 +191,8 @@ class ConvBase(NNBase):
         self.train()  # set module in training mode
 
     def forward(self, inputs, rnn_hxs, masks):
+        # NaN are for avatars who are not playing anymore
+        inputs[torch.isnan(inputs)] = 0
         first_two_dims = None
         if len(inputs.shape) == 5:
             first_two_dims = inputs.shape[:2]
@@ -202,7 +204,7 @@ class ConvBase(NNBase):
         # print('infinite inputs', (~torch.isfinite(inputs)).sum())
         x = self.main(inputs)
         # x[x != x] = 0  # FIXME why are there nans?
-        print('nan entries in output', torch.isnan(x).sum())
+        # print('nan entries in output', torch.isnan(x).sum())
 
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)

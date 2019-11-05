@@ -119,7 +119,8 @@ class RolloutStorage:
                 f"to be greater than or equal to the number of PPO mini batches ({num_mini_batch}).")
             mini_batch_size = batch_size // num_mini_batch
 
-        valid_indices = torch.isfinite(self.returns[:-1].flatten()).nonzero().squeeze(1)
+        # Just those indices where there are no nans in the state
+        valid_indices = (~torch.isnan(self.obs[:-1])).any(-1).any(-1).any(-1).nonzero().flatten()
         # If we sample from a 1D tensor, the `indices` will a list of tensors,
         # which does not go well with torch's `index_select` or tensor[indices]
         sampler = BatchSampler(
@@ -139,8 +140,8 @@ class RolloutStorage:
                 adv_targ = None
             else:
                 adv_targ                  = advantages                       .view(-1, 1)[indices]
-            print('number of returns that are not finite:', torch.sum(~torch.isfinite(return_batch)).data)
-            print('number of returns that are nan:', torch.sum(~torch.isnan(return_batch)).data)
+            # print('number of returns that are not finite:', torch.sum(~torch.isfinite(return_batch)).data)
+            # print('number of returns that are nan:', torch.sum(~torch.isnan(return_batch)).data)
 
             yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
                 value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ

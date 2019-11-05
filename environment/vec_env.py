@@ -32,7 +32,7 @@ def make_vec_envs(env_name,
         num_avatars = 1
 
     if len(envs) > 1:
-        envs = SubprocVecEnv(envs, context='fork')
+        envs = SubprocVecEnv(envs)
     else:
         envs = DummyVecEnv(envs)
 

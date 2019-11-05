@@ -20,7 +20,7 @@ def get_args():
     # Policy
     parser.add_argument(
         '--policy-base',
-        default='fc',
+        default='conv',
         choices=['conv', 'fc'],
         help='neural network architecture'
     )

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """ Custom environment """
 
 from gym.spaces import Box, Discrete
@@ -72,7 +73,7 @@ class Hide_and_seek_Env(Env):
         self.num_avatars = self.n_thieves + self.n_guardians
         self.action_space = Discrete(len(action_idx2delta))
         self.observation_space = Box(low=EMPTY, high=TREASURE, shape=(5, self.width, self.height), dtype=int)
-        self._dummy_dead_state = np.zeros((5, self.width, self.height))
+        self._dummy_dead_state = np.full((5, self.width, self.height), np.nan)
 
         self.id2team = np.array([THIEF] * self.n_thieves + [GUARDIAN] * self.n_guardians)
 
@@ -183,7 +184,7 @@ class Hide_and_seek_Env(Env):
         info = {}
         individual_done = np.zeros(self.num_avatars, bool)
         reward          = np.zeros(self.num_avatars, float)
-        reward[~self.avatar_alive] = np.float('-inf')
+        # reward[~self.avatar_alive] = np.float('-inf')
 
         avatars_alive = self.avatar_alive.nonzero()[0]
 
@@ -329,11 +330,11 @@ class Hide_and_seek_Env(Env):
 
     def render(self, mode='print'):
         CELL_TYPE2LETTER = {
-            EMPTY:    '·',
-            WALL:     '□',
+            EMPTY:    '.',
+            WALL:     'W',
             THIEF:    'T',
             GUARDIAN: 'G',
-            TREASURE: '☆',
+            TREASURE: 'R',
         }
 
         s = ''
