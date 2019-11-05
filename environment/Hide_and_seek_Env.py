@@ -263,7 +263,11 @@ class Hide_and_seek_Env(Env):
                 self.avatar_alive[thief_id] = False
                 self.id2pos[thief_id] = None
                 individual_done[thief_id] = True
+
                 self.map[old_pos] = EMPTY
+                self.map[new_pos] = GUARDIAN
+                self.id2pos[avatar_id] = new_pos
+                self.pos2id[new_pos] = avatar_id
 
                 reward[thief_id]  += thief_reward
                 reward[avatar_id] += guardian_reward
