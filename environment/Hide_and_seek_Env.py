@@ -282,7 +282,7 @@ class Hide_and_seek_Env(Env):
         if self.elapsed_time == self.time_limit:
             thief_reward, guardian_reward = REWARDS['out_of_time']
             info['end_reason'] = 'Ran out of time'
-
+            individual_done[:] = True
             # Apply reward to all avatars alive
             for id in avatars_alive:
                 team = self.id2team[id]
