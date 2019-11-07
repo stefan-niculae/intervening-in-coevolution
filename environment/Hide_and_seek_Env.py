@@ -37,6 +37,7 @@ REWARDS = {
 
 
 class Hide_and_seek_Env(Env):
+    metadata = {'render.modes': ['rgb_array']}
     """ Thieves aim to reach a trueasure, guardians aim to catch the thieves """
 
     """
@@ -358,7 +359,7 @@ class Hide_and_seek_Env(Env):
 
 
 if __name__ == '__main__':
-    e = Hide_and_seek_Env()
+    e = Hide_and_seek_Env(0)
     e.render()
     print()
 
