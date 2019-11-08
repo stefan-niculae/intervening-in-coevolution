@@ -9,8 +9,8 @@ import numpy as np
 import torch
 
 from arguments import get_args
-from environment.parallelization import get_vec_normalize
-from running.evaluation import evaluate
+# from environment.parallelization import get_vec_normalize
+# from running.evaluation import evaluate
 from running.training import instantiate, perform_update
 
 
@@ -56,11 +56,11 @@ def main():
             log_progress(args, update_number, episode_rewards, time.time() - start_t,
                          value_loss, action_loss, dist_entropy)
 
-        if (args.eval_interval is not None and len(episode_rewards) > 1
-                and update_number % args.eval_interval == 0):
-            ob_rms = get_vec_normalize(envs).ob_rms
-            evaluate(actor_critic, ob_rms, args.env_name, args.seed,
-                     args.num_processes, eval_log_dir, device)
+        # if (args.eval_interval is not None and len(episode_rewards) > 1
+        #         and update_number % args.eval_interval == 0):
+        #     ob_rms = get_vec_normalize(envs).ob_rms
+        #     evaluate(actor_critic, ob_rms, args.env_name, args.seed,
+        #              args.num_processes, eval_log_dir, device)
 
 
 def save_model(args, envs, actor_critic):
@@ -69,7 +69,7 @@ def save_model(args, envs, actor_critic):
 
     torch.save([
         actor_critic,
-        getattr(get_vec_normalize(envs), 'ob_rms', None)
+        None,  # getattr(get_vec_normalize(envs), 'ob_rms', None)
     ], os.path.join(save_path, args.env_name + ".pt"))
 
 

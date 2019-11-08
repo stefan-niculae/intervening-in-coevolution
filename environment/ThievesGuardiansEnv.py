@@ -49,9 +49,10 @@ class ThievesGuardiansEnv(Env):
     or an Actor (executes for all Agents)
     """
 
-    def __init__(self, env_id, width=8, height=8, time_limit=30, n_thieves=2, n_guardians=2, wall_density=0.):
+    def __init__(self, scenario, env_id, width=8, height=8, time_limit=30, n_thieves=2, n_guardians=2, wall_density=0.):
         """
         Args:
+            scenario: str
             width: number of horizontal cells
             height: number of vertical cells
             time_limit: one time step is when all avatars (thieves and guardians) moved
@@ -172,6 +173,16 @@ class ThievesGuardiansEnv(Env):
     def in_bounds(self, x, y):
         return 0 <= x < self.width and 0 <= y < self.height
 
+    def _move_or_kill(self, avatar_id, avatar_team, old_pos, new_pos=None):
+        self.map[old_pos] = EMPTY
+        del self.pos2id[old_pos]
+        if new_pos is None:
+            self.avatar_alive[avatar_id] = False
+        else:
+            self.map[new_pos] = avatar_team
+            self.id2pos[avatar_id] = new_pos
+            self.pos2id[new_pos] = avatar_id
+
     def step(self, actions: [int]):
         """
         actions shape: (num_avatars,)
@@ -240,12 +251,7 @@ class ThievesGuardiansEnv(Env):
 
             # Any team can move freely to an empty cell
             if new_pos_type == EMPTY:
-                self.map[old_pos] = EMPTY
-                self.map[new_pos] = avatar_team
-
-                self.id2pos[avatar_id] = new_pos
-                self.pos2id[new_pos] = avatar_id
-
+                self._move_or_kill(avatar_id, avatar_team, old_pos, new_pos)
                 continue
 
             thief_reward, guardian_reward = REWARDS['killed']
@@ -253,10 +259,8 @@ class ThievesGuardiansEnv(Env):
             if avatar_team == THIEF and new_pos_type == GUARDIAN:
                 guardian_id = self.pos2id[new_pos]
 
-                self.avatar_alive[avatar_id] = False
-                self.id2pos[avatar_id] = None
+                self._move_or_kill(avatar_id, THIEF, old_pos)
                 individual_done[avatar_id] = True
-                self.map[old_pos] = EMPTY
 
                 reward[avatar_id]   += thief_reward
                 reward[guardian_id] += guardian_reward
@@ -266,14 +270,10 @@ class ThievesGuardiansEnv(Env):
             if avatar_team == GUARDIAN and new_pos_type == THIEF:
                 thief_id = self.pos2id[new_pos]
 
-                self.avatar_alive[thief_id] = False
-                self.id2pos[thief_id] = None
+                self._move_or_kill(thief_id, THIEF, new_pos)
                 individual_done[thief_id] = True
 
-                self.map[old_pos] = EMPTY
-                self.map[new_pos] = GUARDIAN
-                self.id2pos[avatar_id] = new_pos
-                self.pos2id[new_pos] = avatar_id
+                self._move_or_kill(avatar_id, GUARDIAN, old_pos, new_pos)
 
                 reward[thief_id]  += thief_reward
                 reward[avatar_id] += guardian_reward
@@ -303,7 +303,7 @@ class ThievesGuardiansEnv(Env):
         all_done = all(individual_done)
 
         if DEBUG:
-            self.render('file')  # TODO: remove (debug)
+            self.render('file')
         
         return state, reward, all_done, info
 
