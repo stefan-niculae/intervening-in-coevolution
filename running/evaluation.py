@@ -1,8 +1,8 @@
 import numpy as np
 import torch
 
-from environment.vec_env import get_vec_normalize
-from environment.vec_env import make_vec_envs
+from environment.parallelization import get_vec_normalize
+from environment.parallelization import make_vec_envs
 
 
 N_EPISODES = 10

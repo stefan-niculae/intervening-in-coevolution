@@ -2,7 +2,7 @@
 
 import torch
 
-from environment.vec_env import make_vec_envs
+from environment.parallelization import make_vec_envs
 from agent.policies import Policy
 from agent.algorithms import PPO, A2C_ACKTR
 from agent.storage import RolloutStorage

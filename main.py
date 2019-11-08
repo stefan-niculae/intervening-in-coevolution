@@ -9,7 +9,7 @@ import numpy as np
 import torch
 
 from arguments import get_args
-from environment.vec_env import get_vec_normalize
+from environment.parallelization import get_vec_normalize
 from running.evaluation import evaluate
 from running.training import instantiate, perform_update
 

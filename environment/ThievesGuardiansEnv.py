@@ -35,8 +35,11 @@ REWARDS = {
     'treasure':    (+9,  0),
 }
 
+DEBUG = False
+dump_path = 'outputs/execution#%d'
 
-class Hide_and_seek_Env(Env):
+
+class ThievesGuardiansEnv(Env):
     metadata = {'render.modes': ['rgb_array']}
     """ Thieves aim to reach a trueasure, guardians aim to catch the thieves """
 
@@ -57,8 +60,6 @@ class Hide_and_seek_Env(Env):
             wall_density:
         """
         self.env_id = env_id
-        with open(f'env-{self.env_id}', 'w') as f:
-            f.write('')
         self.width = width
         self.height = height
         self._quadrant_ranges = self.compute_quadrants()
@@ -85,6 +86,10 @@ class Hide_and_seek_Env(Env):
         self.walls_channel = None
         self.treasure_channel = None
         self.reset()
+
+        if DEBUG:
+            with open(dump_path % env_id, 'w') as f:
+                f.write('')
 
     def reset(self):
         self.elapsed_time = 0
@@ -141,7 +146,7 @@ class Hide_and_seek_Env(Env):
     def generate_positions(self):
         """ Place wall pieces randomly, and then the treasure, thieves and guardians in different quadrants """
         # TODO handcrafted wall positions (otherwise it'll sometimes be unsolvable, and main task is not generalizing to unseen maps necessarily, instead, learning to out-maneuver the other team around obstacles that allow that
-        wall_mask = np.random.rand(self.height, self.width) < self.wall_density
+        wall_mask = np.random.rand(self.width, self.height) < self.wall_density
         self.map[wall_mask] = WALL
         self.walls_channel = wall_mask.astype(float)
 
@@ -296,7 +301,10 @@ class Hide_and_seek_Env(Env):
 
         info['individual_done'] = individual_done
         all_done = all(individual_done)
-        self.render('file')  # TODO: remove (debug)
+
+        if DEBUG:
+            self.render('file')  # TODO: remove (debug)
+        
         return state, reward, all_done, info
 
     def compute_all_states(self):
@@ -359,7 +367,7 @@ class Hide_and_seek_Env(Env):
 
 
 if __name__ == '__main__':
-    e = Hide_and_seek_Env(0)
+    e = ThievesGuardiansEnv(0)
     e.render()
     print()
 
