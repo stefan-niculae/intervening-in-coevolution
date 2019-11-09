@@ -36,11 +36,10 @@ REWARDS = {
 }
 
 DEBUG = False
-dump_path = 'outputs/execution#%d'
+dump_path = 'outputs/execution-#%d'
 
 
 class ThievesGuardiansEnv(Env):
-    metadata = {'render.modes': ['rgb_array']}
     """ Thieves aim to reach a trueasure, guardians aim to catch the thieves """
 
     """
@@ -49,44 +48,47 @@ class ThievesGuardiansEnv(Env):
     or an Actor (executes for all Agents)
     """
 
-    def __init__(self, scenario, env_id, width=8, height=8, time_limit=30, n_thieves=2, n_guardians=2, wall_density=0.):
-        """
-        Args:
-            scenario: str
-            width: number of horizontal cells
-            height: number of vertical cells
-            time_limit: one time step is when all avatars (thieves and guardians) moved
-            n_thieves:
-            n_guardians:
-            wall_density:
-        """
-        self.env_id = env_id
-        self.width = width
-        self.height = height
-        self._quadrant_ranges = self.compute_quadrants()
+    metadata = {'render.modes': ['rgb_array']}
 
-        self.time_limit = time_limit  # TODO look at TimeLimitMask EnvWrapper to see expected names
+    def __init__(self, scenario: str, env_id: int):
+        self.env_id = env_id
+
+        if scenario.startswith('random'):
+            from environment.scenarios import random_scenario_configs
+            config = random_scenario_configs[scenario[-1]]
+        else:
+            from environment.scenarios import fixed_scenario_config
+            config = fixed_scenario_config(scenario)
+
+        self._width = config.width
+        self._height = config.height
+        self._fixed_original_map = config.fixed_map
+
+        if self._fixed_original_map is None:
+            self._quadrant_ranges = self._compute_quadrants()
+            self._wall_density = config.wall_density
+
+        self.time_limit = config.time_limit  # TODO look at TimeLimitMask EnvWrapper to see expected names
         self.elapsed_time = None
 
-        self.n_thieves = n_thieves
-        self.n_guardians = n_guardians
-        self.wall_density = wall_density
-        self.n_remaining_thieves = self.n_thieves
+        self._n_thieves = config.n_thieves
+        self._n_guardians = config.n_guardians
 
-        self.num_avatars = self.n_thieves + self.n_guardians
+        self.num_avatars = self._n_thieves + self._n_guardians
         self.action_space = Discrete(len(action_idx2delta))
-        self.observation_space = Box(low=EMPTY, high=TREASURE, shape=(5, self.width, self.height), dtype=int)
-        self._dummy_dead_state = np.full((5, self.width, self.height), np.nan)
+        self.observation_space = Box(low=0, high=1, shape=(5, self._width, self._height), dtype=np.uint8)
+        self._dummy_dead_state = np.full((5, self._width, self._height), np.nan)
 
-        self.id2team = np.array([THIEF] * self.n_thieves + [GUARDIAN] * self.n_guardians)
-        self._controller = (self.id2team == THIEF).astype(np.uint8)  # zero/one, used to select model
+        self._id2team = np.array([THIEF] * self._n_thieves + [GUARDIAN] * self._n_guardians)
+        self._controller = (self._id2team == THIEF).astype(np.uint8)  # zero/one, used to select model
 
-        self.avatar_alive = None
-        self.map = None
-        self.id2pos = None
-        self.pos2id = None
-        self.walls_channel = None
-        self.treasure_channel = None
+        self._n_remaining_thieves = None
+        self._avatar_alive = None
+        self._map = None
+        self._id2pos = None
+        self._pos2id = None
+        self._walls_channel = None
+        self._treasure_channel = None
         self.reset()
 
         if DEBUG:
@@ -95,27 +97,28 @@ class ThievesGuardiansEnv(Env):
 
     def reset(self):
         self.elapsed_time = 0
+        self._n_remaining_thieves = self._n_thieves
 
-        self.map = np.full((self.width, self.height), EMPTY)
-        self.id2pos = {}  # TODO make these two numpy arrays
-        self.pos2id = {}
+        self._map = np.full((self._width, self._height), EMPTY)
+        self._id2pos = {}
+        self._pos2id = {}
 
-        self.generate_positions()
-        self.avatar_alive = np.ones(self.num_avatars, bool)
+        self._reset_map()
+        self._avatar_alive = np.ones(self.num_avatars, bool)
 
-        return self.compute_all_states()
+        return self._compute_all_states()
 
     def random_cell(self, x_range, y_range) -> (int, int):
         x = np.random.randint(*x_range)
         y = np.random.randint(*y_range)
         return x, y
 
-    def random_empty_cell(self, quadrant_idx) -> (int, int):
+    def _random_empty_cell(self, quadrant_idx) -> (int, int):
         ranges = self._quadrant_ranges[quadrant_idx]
 
         failsafe = 0
         x, y = self.random_cell(*ranges)
-        while self.map[x, y] != EMPTY:
+        while self._map[x, y] != EMPTY:
             x, y = self.random_cell(*ranges)
             failsafe += 1
             if failsafe == 100:
@@ -123,15 +126,15 @@ class ThievesGuardiansEnv(Env):
 
         return x, y
 
-    def compute_quadrants(self) -> [((int, int), (int, int))]:
+    def _compute_quadrants(self) -> [((int, int), (int, int))]:
         """
         Split the map into four equal quadrants
 
         Returns:
             for each of the four quadrants, an x range and a y range
         """
-        W = self.width
-        H = self.height
+        W = self._width
+        H = self._height
         H2 = H//2
         W2 = W//2
         top    = ( 0, H2)
@@ -145,44 +148,58 @@ class ThievesGuardiansEnv(Env):
             (right, bottom),
         ]
 
-    def generate_positions(self):
+    def _reset_map(self):
         """ Place wall pieces randomly, and then the treasure, thieves and guardians in different quadrants """
-        # TODO handcrafted wall positions (otherwise it'll sometimes be unsolvable, and main task is not generalizing to unseen maps necessarily, instead, learning to out-maneuver the other team around obstacles that allow that
-        wall_mask = np.random.rand(self.width, self.height) < self.wall_density
-        self.map[wall_mask] = WALL
-        self.walls_channel = wall_mask.astype(float)
+        if self._fixed_original_map is not None:
+            self._map = self._fixed_original_map.copy()
 
-        thieves_quad, guardians_quad, treasure_quad = np.random.choice(4, size=3, replace=False)
+        else:
+            # Place walls
+            wall_mask = np.random.rand(self._width, self._height) < self._wall_density
+            self._map[wall_mask] = WALL
+            self._walls_channel = wall_mask.astype(float)
 
-        treasure_pos = self.random_empty_cell(treasure_quad)
-        self.map[treasure_pos] = TREASURE
-        self.treasure_channel = np.zeros_like(self.map, float)
-        self.treasure_channel[treasure_pos] = 1
+            # Pick areas for the teams and treasure
+            thieves_quad, guardians_quad, treasure_quad = np.random.choice(4, size=3, replace=False)
 
-        for avatar_id in range(self.n_thieves):
-            x, y = self.random_empty_cell(thieves_quad)
-            self.id2pos[avatar_id] = x, y
-            self.pos2id[(x, y)] = avatar_id
-            self.map[x, y] = THIEF
+            # Place treasure
+            treasure_pos = self._random_empty_cell(treasure_quad)
+            self._map[treasure_pos] = TREASURE  # TODO walls don't block off objects
 
-        for avatar_id in range(self.n_thieves, self.n_thieves + self.n_guardians):
-            x, y = self.random_empty_cell(guardians_quad)
-            self.id2pos[avatar_id] = x, y
-            self.pos2id[(x, y)] = avatar_id
-            self.map[x, y] = GUARDIAN
+            # Place the thieves and guardians
+            for avatar_id in range(self._n_thieves):
+                x, y = self._random_empty_cell(thieves_quad)
+                self._map[x, y] = THIEF
+
+            for avatar_id in range(self._n_thieves, self._n_thieves + self._n_guardians):
+                x, y = self._random_empty_cell(guardians_quad)
+                self._map[x, y] = GUARDIAN
+
+        # Precompute treasure channel since it's static
+        self._treasure_channel = (self._map == TREASURE).astype(int)
+
+        # Set avatar position bidirectional caches (first thieves then guardians)
+        xs_t, ys_t = np.where(self._map == THIEF)
+        xs_g, ys_g = np.where(self._map == GUARDIAN)
+        xs = np.concatenate([xs_t, xs_g])
+        ys = np.concatenate([ys_t, ys_g])
+        for avatar_id, (x, y) in enumerate(zip(xs, ys)):
+            self._id2pos[avatar_id] = x, y
+            self._pos2id[(x, y)] = avatar_id
 
     def in_bounds(self, x, y):
-        return 0 <= x < self.width and 0 <= y < self.height
+        return 0 <= x < self._width and 0 <= y < self._height
 
     def _move_or_kill(self, avatar_id, avatar_team, old_pos, new_pos=None):
-        self.map[old_pos] = EMPTY
-        del self.pos2id[old_pos]
+        self._map[old_pos] = EMPTY
+        del self._pos2id[old_pos]
         if new_pos is None:
-            self.avatar_alive[avatar_id] = False
+            self._avatar_alive[avatar_id] = False
+            self._id2team[avatar_id] = None
         else:
-            self.map[new_pos] = avatar_team
-            self.id2pos[avatar_id] = new_pos
-            self.pos2id[new_pos] = avatar_id
+            self._map[new_pos] = avatar_team
+            self._id2pos[avatar_id] = new_pos
+            self._pos2id[new_pos] = avatar_id
 
     def step(self, actions: [int]):
         """
@@ -203,12 +220,12 @@ class ThievesGuardiansEnv(Env):
         individual_done = np.zeros(self.num_avatars, bool)
         reward          = np.zeros(self.num_avatars, float)
 
-        avatars_alive = self.avatar_alive.nonzero()[0]
+        avatars_alive = self._avatar_alive.nonzero()[0]
 
         for avatar_id in avatars_alive:
             action_idx = actions[avatar_id]
             delta = action_idx2delta[action_idx]
-            old_pos = self.id2pos[avatar_id]
+            old_pos = self._id2pos[avatar_id]
             new_pos = tuple(old_pos + delta)  # NOTE: make sure self.map[pos] the arg is a tuple, not a (2,) array
 
             # No team can move out of bounds, just ignore the action
@@ -218,8 +235,8 @@ class ThievesGuardiansEnv(Env):
             # new_pos[0] %= self.width
             # new_pos[1] %= self.height
 
-            avatar_team  = self.map[old_pos]  # the character that is currently moving
-            new_pos_type = self.map[new_pos]
+            avatar_team  = self._map[old_pos]  # the character that is currently moving
+            new_pos_type = self._map[new_pos]
 
             # Trying to step onto a teammate, just ignore the action
             if new_pos_type == avatar_team:
@@ -243,8 +260,8 @@ class ThievesGuardiansEnv(Env):
                 reward[avatar_id] += thief_reward
 
                 # Punish all guardians
-                for pos, id in self.pos2id.items():
-                    if self.map[pos] == GUARDIAN:
+                for pos, id in self._pos2id.items():
+                    if self._map[pos] == GUARDIAN:
                         reward[id] += guardian_reward
 
                 continue
@@ -257,7 +274,7 @@ class ThievesGuardiansEnv(Env):
             thief_reward, guardian_reward = REWARDS['killed']
             # A thief is (stupidly) bumping into a guardian, kill the thief and apply rewards
             if avatar_team == THIEF and new_pos_type == GUARDIAN:
-                guardian_id = self.pos2id[new_pos]
+                guardian_id = self._pos2id[new_pos]
 
                 self._move_or_kill(avatar_id, THIEF, old_pos)
                 individual_done[avatar_id] = True
@@ -268,7 +285,7 @@ class ThievesGuardiansEnv(Env):
 
             # A guardian managed to catch a thief, kill the thief and apply rewards
             if avatar_team == GUARDIAN and new_pos_type == THIEF:
-                thief_id = self.pos2id[new_pos]
+                thief_id = self._pos2id[new_pos]
 
                 self._move_or_kill(thief_id, THIEF, new_pos)
                 individual_done[thief_id] = True
@@ -280,7 +297,7 @@ class ThievesGuardiansEnv(Env):
                 continue
 
         # No more thieves alive, the game is over (thieves and guardians have been rewarded at the moments of killing)
-        if sum(self.avatar_alive) == 0:
+        if sum(self._avatar_alive) == 0:
             info['end_reason'] = 'All thieves dead'
             individual_done[:] = True
 
@@ -291,13 +308,13 @@ class ThievesGuardiansEnv(Env):
             individual_done[:] = True
             # Apply reward to all avatars alive
             for id in avatars_alive:
-                team = self.id2team[id]
+                team = self._id2team[id]
                 if team == GUARDIAN:
                     reward[id] += guardian_reward
                 if team == THIEF:
                     reward[id] += thief_reward
 
-        state = self.compute_all_states()
+        state = self._compute_all_states()
 
         info['individual_done'] = individual_done
         all_done = all(individual_done)
@@ -307,13 +324,13 @@ class ThievesGuardiansEnv(Env):
         
         return state, reward, all_done, info
 
-    def compute_all_states(self):
+    def _compute_all_states(self):
         return np.stack([
-            self.compute_state(id) if alive else self._dummy_dead_state
-            for id, alive in enumerate(self.avatar_alive)
+            self._compute_state(id) if alive else self._dummy_dead_state
+            for id, alive in enumerate(self._avatar_alive)
         ])
 
-    def compute_state(self, for_id):
+    def _compute_state(self, for_id):
         """
         Five channels, each of size width by height, each cell having values 0 or 1
             1. own position
@@ -323,23 +340,23 @@ class ThievesGuardiansEnv(Env):
             5. treasure
         """
         # TODO flat version of the state, but somehow handle the fact that thieves can die; also must have a fixed number of obstacles; and the coordinates should be normalized to (-1, +1) on both x and y axes
-        own_pos  = self.id2pos [for_id]
-        own_team = self.id2team[for_id]
+        own_pos  = self._id2pos [for_id]
+        own_team = self._id2team[for_id]
         opposing_team = GUARDIAN if own_team == THIEF else THIEF
 
-        own = np.zeros_like(self.map, float)
+        own = np.zeros_like(self._map, float)
         own[own_pos] = 1
 
-        teammates = np.zeros_like(self.map, float)
-        opponents = np.zeros_like(self.map, float)
-        for pos, id in self.pos2id.items():
-            if self.id2team[id] == own_team:
+        teammates = np.zeros_like(self._map, float)
+        opponents = np.zeros_like(self._map, float)
+        for pos, id in self._pos2id.items():
+            if self._id2team[id] == own_team:
                 teammates[pos] = 1
-            if self.id2team[id] == opposing_team:
+            if self._id2team[id] == opposing_team:
                 opponents[pos] = 1
 
         # Channels first
-        return np.stack([own, teammates, opponents, self.walls_channel, self.treasure_channel])
+        return np.stack([own, teammates, opponents, self._walls_channel, self._treasure_channel])
 
     def render(self, mode='print'):
         CELL_TYPE2LETTER = {
@@ -347,11 +364,11 @@ class ThievesGuardiansEnv(Env):
             WALL:     'W',
             THIEF:    'T',
             GUARDIAN: 'G',
-            TREASURE: 'R',
+            TREASURE: 'S',
         }
 
         s = ''
-        for row in self.map:
+        for row in self._map:
             for cell in row:
                 s += CELL_TYPE2LETTER[cell] + ' '
             s += '\n'
@@ -363,18 +380,8 @@ class ThievesGuardiansEnv(Env):
             with open(f'env-{self.env_id}', 'a') as f:
                 f.write(s + '\n\n')
 
-        # TODO matplotlib grid plot (EMPTY: white, WALL: grey, GOAL: yellow, THIEF: red, GUARDIAN: blue) with the id of the thief/guardian written in the middle of the respective cells; also compatible with the MonitorEnvWrapper that creates short videos (like in the homework)
-
 
 if __name__ == '__main__':
-    e = ThievesGuardiansEnv(0)
+    e = ThievesGuardiansEnv('4x4-thief-treasure', env_id=0)
     e.render()
     print()
-
-    e.step({
-        0: UP,
-        1: UP,
-        2: UP,
-        3: UP,
-    })
-    e.render()
