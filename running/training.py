@@ -1,5 +1,6 @@
 """ Decoupled steps (initialize and update) of the learning process  """
 
+import numpy as np
 import torch
 
 from environment.parallelization import make_vec_envs
@@ -16,6 +17,7 @@ def instantiate(args, device):
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
+        num_controllers=2,
         base_kind=args.policy_base,
         base_kwargs={'recurrent': args.recurrent_policy})
     actor_critic.to(device)
@@ -67,7 +69,7 @@ def perform_update(args, envs, actor_critic, agent, rollouts, update_number, n_u
         # Sample actions
         with torch.no_grad():
             value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(
-                rollouts.obs[step], rollouts.recurrent_hidden_states[step], rollouts.masks[step])
+                rollouts.controller[step], rollouts.obs[step], rollouts.recurrent_hidden_states[step], rollouts.masks[step])
 
         # Simulate the environment
         obs, reward, all_done, infos = envs.step(action)
@@ -81,14 +83,17 @@ def perform_update(args, envs, actor_critic, agent, rollouts, update_number, n_u
         masks = torch.FloatTensor([i['individual_done'] for i in infos])
         masks.unsqueeze_(-1)
 
+        controller = np.array([i['controller'] for i in infos])
+
         if args.use_proper_time_limits:
             bad_masks = torch.FloatTensor([[0] if 'bad_transition' in i else [1] for i in infos])
         else:
             bad_masks = None
-        rollouts.insert(obs, recurrent_hidden_states, action, action_log_prob, value, reward, masks, bad_masks)
+        rollouts.insert(obs, recurrent_hidden_states, action, action_log_prob, value, reward, masks, bad_masks, controller)
 
     with torch.no_grad():
-        next_value = actor_critic.get_value(rollouts.obs[-1], rollouts.recurrent_hidden_states[-1], rollouts.masks[-1]).detach()
+        next_value = actor_critic.get_value(
+            rollouts.controller[-1], rollouts.obs[-1], rollouts.recurrent_hidden_states[-1], rollouts.masks[-1]).detach()
 
     rollouts.compute_returns(next_value, args.use_gae, args.gamma, args.gae_lambda)
 

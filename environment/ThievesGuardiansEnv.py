@@ -79,6 +79,7 @@ class ThievesGuardiansEnv(Env):
         self._dummy_dead_state = np.full((5, self.width, self.height), np.nan)
 
         self.id2team = np.array([THIEF] * self.n_thieves + [GUARDIAN] * self.n_guardians)
+        self._controller = (self.id2team == THIEF).astype(np.uint8)  # zero/one, used to select model
 
         self.avatar_alive = None
         self.map = None
@@ -198,10 +199,9 @@ class ThievesGuardiansEnv(Env):
             infos['individual_done']: (num_avatars,)
 
         """
-        info = {}
+        info = {'controller': self._controller}
         individual_done = np.zeros(self.num_avatars, bool)
         reward          = np.zeros(self.num_avatars, float)
-        # reward[~self.avatar_alive] = np.float('-inf')
 
         avatars_alive = self.avatar_alive.nonzero()[0]
 

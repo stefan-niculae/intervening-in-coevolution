@@ -3,6 +3,7 @@
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 from gym.spaces import Discrete
+import numpy as np
 
 
 def _flatten_helper(T, N, _tensor):
@@ -18,6 +19,7 @@ class RolloutStorage:
         self.returns                 = torch.zeros(num_steps + 1, num_processes, num_avatars, 1)
         self.action_log_probs        = torch.zeros(num_steps    , num_processes, num_avatars, 1)
         self.masks                   = torch.ones (num_steps + 1, num_processes, num_avatars, 1)
+        self.controller              = np.zeros((num_steps + 1, num_processes, num_avatars), np.uint8)
 
         if isinstance(action_space, Discrete):
             self.actions = torch.zeros(num_steps, num_processes, num_avatars, 1).long()
@@ -47,7 +49,7 @@ class RolloutStorage:
             self.bad_masks           = self.bad_masks                .to(device)
 
     def insert(self, obs, recurrent_hidden_states, actions, action_log_probs,
-               value_preds, rewards, masks, bad_masks):
+               value_preds, rewards, masks, bad_masks, controller):
         self.obs                     [self.step + 1].copy_(obs)
         self.recurrent_hidden_states [self.step + 1].copy_(recurrent_hidden_states)
         self.actions                 [self.step    ].copy_(actions)
@@ -55,6 +57,7 @@ class RolloutStorage:
         self.value_preds             [self.step    ].copy_(value_preds)
         self.rewards                 [self.step    ].copy_(rewards)
         self.masks                   [self.step + 1].copy_(masks)
+        self.controller              [self.step + 1] = controller.copy()
 
         if self.use_proper_time_limits:
             self.bad_masks           [self.step + 1].copy_(bad_masks)
@@ -65,6 +68,7 @@ class RolloutStorage:
         self.obs                    [0].copy_(self.obs[-1])
         self.recurrent_hidden_states[0].copy_(self.recurrent_hidden_states[-1])
         self.masks                  [0].copy_(self.masks[-1])
+        self.controller             [0] = self.controller[-1].copy()
         if self.use_proper_time_limits:
             self.bad_masks          [0].copy_(self.bad_masks[-1])
 
@@ -129,6 +133,7 @@ class RolloutStorage:
             drop_last=True)
 
         for indices in sampler:
+            controller_batch              = self.controller             [:-1].reshape(-1)[indices]
             obs_batch                     = self.obs                    [:-1].view(-1, *self.obs.shape[3:])[indices]
             recurrent_hidden_states_batch = self.recurrent_hidden_states[:-1].view(-1, self.recurrent_hidden_states.size(-1))[indices]
             actions_batch                 = self.actions                     .view(-1, self.actions.size(-1))[indices]
@@ -143,7 +148,7 @@ class RolloutStorage:
             # print('number of returns that are not finite:', torch.sum(~torch.isfinite(return_batch)).data)
             # print('number of returns that are nan:', torch.sum(~torch.isnan(return_batch)).data)
 
-            yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
+            yield controller_batch, obs_batch, recurrent_hidden_states_batch, actions_batch, \
                 value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ
 
     def recurrent_generator(self, advantages, num_mini_batch):
