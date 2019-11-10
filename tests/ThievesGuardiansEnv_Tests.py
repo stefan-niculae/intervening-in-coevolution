@@ -114,9 +114,18 @@ class MovementTests(unittest.TestCase):
     self._env.step([NOOP, RIGHT])
     self._env.step([NOOP, RIGHT])
     self._env.step([NOOP, RIGHT])
-    
+
     curr_guardian_pos = self._env._id2pos[1]
     expected_pos = (2, 3)
+    self.assertEqual(curr_guardian_pos, expected_pos)
+  
+  def test_move_guardian_treasure(self):
+    """Test guardian bumping into treasure."""
+    self._env.step([NOOP, DOWN])
+    self._env.step([NOOP, RIGHT])
+
+    curr_guardian_pos = self._env._id2pos[1]
+    expected_pos = (3, 2)
     self.assertEqual(curr_guardian_pos, expected_pos)
 
 
@@ -151,6 +160,39 @@ class RewardsTests(unittest.TestCase):
       _, reward, done, _ = self._env.step([NOOP, NOOP])
     
     self.assertEqual(tuple(reward), REWARDS['out_of_time'])
+
+
+class GameEndTests(unittest.TestCase):
+  def setUp(self):
+    """Create simple environment to test end game scenarios."""
+    self._env = ThievesGuardiansEnv('4x4-test-rewards', env_id=0)
+  
+  def test_end_out_of_time(self):
+    """Test that after time limit the game is done."""
+    # Perform no movements for the max number of steps
+    done = False
+    for _ in range(self._env.time_limit):
+      _, _, done, _ = self._env.step([NOOP, NOOP])
+    
+    self.assertTrue(done)
+  
+  def test_end_guardian_catches_thief(self):
+    """Test that when guardian catches last thief game is done."""
+    _, _, done, _ = self._env.step([NOOP, UP])
+
+    self.assertTrue(done)
+  
+  def test_end_thief_runs_into_guard(self):
+    """Test that when last thief kills self game is done."""
+    _, _, done, _ = self._env.step([DOWN, NOOP])
+
+    self.assertTrue(done)
+  
+  def test_end_thief_finds_treasure(self):
+    """Test that when thief finds treasure game is done."""
+    _, _, done, _ = self._env.step([UP, NOOP])
+
+    self.assertTrue(done)
   
 
 if __name__ == '__main__':
