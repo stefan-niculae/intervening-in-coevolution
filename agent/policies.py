@@ -1,26 +1,25 @@
-""" Neural network architectures mapping state to action logits """
 
 import torch
 import torch.nn as nn
 from gym.spaces import Box, Discrete, MultiBinary
 
 from agent.distributions import Bernoulli, Categorical, DiagGaussian
-from agent.models import FCBase, ConvBase
+from agent.controllers import FCController, ConvController
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_shape, action_space, num_controllers, base_kind, base_kwargs=None):
+    def __init__(self, obs_shape, action_space, num_controllers, controller_kind, controller_kwargs=None):
         super().__init__()
-        if base_kwargs is None:
-            base_kwargs = {}
 
-        if base_kind == 'fc':
-            base_class = FCBase
-        if base_kind == 'conv':
-            base_class = ConvBase
+        if controller_kind == 'fc':
+            controller_class = FCController
+        if controller_kind == 'conv':
+            controller_class = ConvController
 
+        if controller_kwargs is None:
+            controller_kwargs = {}
         # Create identical controllers
-        self.controllers = [base_class(obs_shape[0], **base_kwargs) for _ in range(num_controllers)]
+        self.controllers = [controller_class(obs_shape[0], **controller_kwargs) for _ in range(num_controllers)]
 
         if isinstance(action_space, Discrete):
             num_outputs = action_space.n
@@ -45,25 +44,25 @@ class Policy(nn.Module):
         """ Size of rnn_hx. """
         return self.controllers[0].recurrent_hidden_state_size
 
-    def forward(self, inputs, rnn_hxs, masks):
+    def forward(self, env_state, rec_state, done):
         raise NotImplementedError
 
-    def _run_controllers(self, controller_ids, inputs, rnn_hxs_input, masks):
+    def _run_controllers(self, controller_ids, env_state, rec_state_input, done):
         """ Distribute the load to each controller and then merge them back """
         first_two_dims = None
-        batch_size = inputs.size(0)
-        if len(inputs.shape) == 5:
-            first_two_dims = inputs.shape[:2]
-            batch_size = inputs.size(0) * inputs.size(1)
+        batch_size = env_state.size(0)
+        if len(env_state.shape) == 5:
+            first_two_dims = env_state.shape[:2]
+            batch_size       = env_state.size(0) * env_state.size(1)
             # [num_processes, num_avatars, C, W, H] to [num_processes * num_avatars, C, W, H]
-            inputs         = inputs       .view(-1, *inputs.shape[2:])
-            rnn_hxs_input  = rnn_hxs_input.view(-1, *rnn_hxs_input.shape[2:])
-            masks          = masks        .view(-1, *masks.shape[2:])
-            controller_ids = controller_ids.flatten()
+            env_state        = env_state      .view(-1, *env_state.shape[2:])
+            rec_state_input  = rec_state_input.view(-1, *rec_state_input.shape[2:])
+            done             = done           .view(-1, *done.shape[2:])
+            controller_ids   = controller_ids.flatten()
 
-        value          = torch.zeros(batch_size, 1)
-        actor_features = torch.zeros(batch_size, self.controllers[0].output_size)
-        rnn_hxs_output = torch.zeros(batch_size, 1)
+        value            = torch.zeros(batch_size, 1)
+        actor_features   = torch.zeros(batch_size, self.controllers[0].output_size)
+        rec_state_output = torch.zeros(batch_size, 1)
         for id, controller in enumerate(self.controllers):
             controller_mask = (controller_ids == id)
             if sum(controller_mask) == 0:
@@ -72,27 +71,26 @@ class Policy(nn.Module):
             # Act just on the samples meant for this input
             controller_value, \
             controller_actor_features, \
-            controller_rnn_hxs \
-                = controller(inputs       [controller_mask],
-                             rnn_hxs_input[controller_mask],
-                             masks        [controller_mask])
+            controller_rec_state \
+                = controller(env_state      [controller_mask],
+                             rec_state_input[controller_mask],
+                             done           [controller_mask])
 
             # Place the results in the spots for them
-            value         [controller_mask] = controller_value
-            actor_features[controller_mask] = controller_actor_features
-            rnn_hxs_output[controller_mask] = controller_rnn_hxs
+            value           [controller_mask] = controller_value
+            actor_features  [controller_mask] = controller_actor_features
+            rec_state_output[controller_mask] = controller_rec_state
 
         # Re-form the two dimensional batch shape
         if first_two_dims:
-            value          = value.view         (*first_two_dims, *value.shape[1:])
-            actor_features = actor_features.view(*first_two_dims, *actor_features.shape[1:])
-            rnn_hxs_output = rnn_hxs_output.view(*first_two_dims, *rnn_hxs_output.shape[1:])
+            value            = value           .view(*first_two_dims, *value.shape[1:])
+            actor_features   = actor_features  .view(*first_two_dims, *actor_features.shape[1:])
+            rec_state_output = rec_state_output.view(*first_two_dims, *rec_state_output.shape[1:])
 
-        return value, actor_features, rnn_hxs_output
+        return value, actor_features, rec_state_output
 
-    def act(self, controller_ids, inputs, rnn_hxs, masks, deterministic=False):
-        """ Pick action """
-        value, actor_features, rnn_hxs = self._run_controllers(controller_ids, inputs, rnn_hxs, masks)
+    def pick_action(self, controller_ids, env_state, rec_state, done, deterministic=False):
+        value, actor_features, rec_state = self._run_controllers(controller_ids, env_state, rec_state, done)
         dist = self.dist(actor_features)
 
         if deterministic:
@@ -102,18 +100,18 @@ class Policy(nn.Module):
 
         action_log_probs = dist.log_probs(action)
 
-        return value, action, action_log_probs, rnn_hxs
+        return value, action, action_log_probs, rec_state
 
-    def get_value(self, controller_ids, inputs, rnn_hxs, masks):
-        value, _, _ = self._run_controllers(controller_ids, inputs, rnn_hxs, masks)
+    def get_value(self, controller_ids, env_state, rec_state, done):
+        value, _, _ = self._run_controllers(controller_ids, env_state, rec_state, done)
         return value
 
-    def evaluate_actions(self, controller_ids, inputs, rnn_hxs, masks, action):
-        value, actor_features, rnn_hxs = self._run_controllers(controller_ids, inputs, rnn_hxs, masks)
+    def evaluate_actions(self, controller_ids, env_state, rec_state, done, action):
+        value, actor_features, rec_state = self._run_controllers(controller_ids, env_state, rec_state, done)
         dist = self.dist(actor_features)
 
         action_log_probs = dist.log_probs(action)
         dist_entropy = dist.entropy().mean()
 
-        return value, action_log_probs, dist_entropy, rnn_hxs
+        return value, action_log_probs, dist_entropy, rec_state
 

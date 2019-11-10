@@ -1,3 +1,5 @@
+""" Neural network architectures mapping state to action logits """
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -5,14 +7,14 @@ import torch.nn as nn
 from agent.utils import init, Flatten
 
 
-class NNBase(nn.Module):
-    def __init__(self, recurrent, recurrent_input_size, hidden_size):
+class NNController(nn.Module):
+    def __init__(self, is_recurrent, recurrent_input_size, hidden_size):
         super().__init__()
 
         self._hidden_size = hidden_size
-        self._recurrent = recurrent
+        self._recurrent = is_recurrent
 
-        if recurrent:
+        if is_recurrent:
             # TODO give option for lstm as well
             self.gru = nn.GRU(recurrent_input_size, hidden_size)
             for name, param in self.gru.named_parameters():
@@ -93,9 +95,9 @@ class NNBase(nn.Module):
         return x, hxs
 
 
-class ConvBase(NNBase):
-    def __init__(self, num_inputs, recurrent=False, hidden_size=16):
-        super().__init__(recurrent, hidden_size, hidden_size)
+class ConvController(NNController):
+    def __init__(self, num_inputs, is_recurrent=False, hidden_size=16):
+        super().__init__(is_recurrent, hidden_size, hidden_size)
         init_ = lambda m: init(
             m,
             nn.init.orthogonal_,
@@ -135,11 +137,11 @@ class ConvBase(NNBase):
         return value, x, rnn_hxs
 
 
-class FCBase(NNBase):
-    def __init__(self, num_inputs, recurrent=False, hidden_size=64):
-        super().__init__(recurrent, num_inputs, hidden_size)
+class FCController(NNController):
+    def __init__(self, num_inputs, is_recurrent=False, hidden_size=64):
+        super().__init__(is_recurrent, num_inputs, hidden_size)
 
-        if recurrent:
+        if is_recurrent:
             num_inputs = hidden_size
 
         init_ = lambda m: init(

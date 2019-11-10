@@ -1,87 +1,77 @@
 """ Gathers arguments, runs learning steps, defines reporting and other I/O """
-
-import glob
-import os
-import time
+import json
+from sys import argv
 from collections import deque
 
 import numpy as np
 import torch
 
-from arguments import get_args
-# from environment.parallelization import get_vec_normalize
-# from running.evaluation import evaluate
+from configs.structure import Config
+from configs.paths import MODEL_CHECKPOINTS, LOGS
 from running.training import instantiate, perform_update
 
 
 LAST_N_REWARDS = 10
 
 
-def main():
-    args = get_args()
+def main(config_path: str):
+    config = read_config(config_path)
 
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
+    # Set random seed
+    torch.manual_seed(config.seed)
+    torch.cuda.manual_seed_all(config.seed)
 
-    if args.cuda and torch.cuda.is_available() and args.cuda_deterministic:
-        torch.backends.cudnn.benchmark = False
-        torch.backends.cudnn.deterministic = True
-
-    log_dir = os.path.expanduser(args.log_dir)
-    eval_log_dir = log_dir + '_eval'
-    cleanup_log_dir(log_dir)
-    cleanup_log_dir(eval_log_dir)
-
+    # Set hardware configuration
     torch.set_num_threads(1)
-    device = torch.device('cuda:0' if args.cuda else 'cpu')
+    device = torch.device('cuda:0' if config.cuda else 'cpu')
 
-    envs, actor_critic, agent, rollouts = instantiate(args, device)
+    envs, policy, agent, rollouts, lr_decay = instantiate(config, device)
     rollouts.to(device)
 
-    episode_rewards = deque(maxlen=LAST_N_REWARDS)
+    # For logging
+    rewards_history = deque(maxlen=LAST_N_REWARDS)
 
-    start_t = time.time()
-    n_updates = int(args.num_env_steps) // args.num_steps // args.num_processes
-    for update_number in range(n_updates):
+    for update_number in range(config.num_updates):
         value_loss, action_loss, dist_entropy = perform_update(
-            args, envs, actor_critic, agent, rollouts,
-            update_number, n_updates, episode_rewards)
+            config, envs, policy, agent, rollouts, rewards_history)
 
-        # save for every interval-th episode or for the last epoch
-        if (update_number % args.save_interval == 0
-                or update_number == n_updates - 1) and args.save_dir:
-            save_model(args, envs, actor_critic)
+        lr_decay.step(update_number)
+        rollouts.clear()
 
-        if update_number % args.log_interval == 0 and len(episode_rewards) > 1:
-            log_progress(args, update_number, episode_rewards, time.time() - start_t,
-                         value_loss, action_loss, dist_entropy)
+        # # save for every interval-th episode or for the last epoch
+        # if (update_number % config.save_interval == 0
+        #         or update_number == config.num_updates - 1):
+        #     save_model(MODEL_CHECKPOINTS, envs, policy)
 
-        # if (args.eval_interval is not None and len(episode_rewards) > 1
-        #         and update_number % args.eval_interval == 0):
-        #     ob_rms = get_vec_normalize(envs).ob_rms
-        #     evaluate(actor_critic, ob_rms, args.env_name, args.seed,
-        #              args.num_processes, eval_log_dir, device)
+        if update_number % config.log_interval == 0 and len(rewards_history) > 1:
+            log_progress(update_number, rewards_history, value_loss, action_loss, dist_entropy)
 
 
-def save_model(args, envs, actor_critic):
-    save_path = os.path.join(args.save_dir, args.algo)
-    os.makedirs(save_path, exist_ok=True)
+def read_config(config_path: str) -> Config:
+    with open(config_path) as f:
+        dict_obj = json.load(f)
+    config = Config()
+    for k, v in dict_obj.items():
+        setattr(config, k, v)
+    return config
 
-    torch.save([
-        actor_critic,
-        None,  # getattr(get_vec_normalize(envs), 'ob_rms', None)
-    ], os.path.join(save_path, args.env_name + ".pt"))
+
+# def save_model(args, envs, policy):
+#     # TODO also save config, and place them all in an "experiment", with the experiment's name being the time it started running
+#     save_path = MODEL_CHECKPOINTS
+#     os.makedirs(save_path, exist_ok=True)
+#
+#     torch.save([
+#         policy,
+#         None,  # getattr(get_vec_normalize(envs), 'ob_rms', None)
+#     ], os.path.join(save_path, args.env_name + ".pt"))
 
 
-def log_progress(args, update_number, episode_rewards, time_elapsed,
-                 value_loss, action_loss, dist_entropy):
-    total_num_steps = (update_number + 1) * args.num_processes * args.num_steps
-    print(f"Updates {update_number}, \t"
-          f"Timesteps {total_num_steps}, \t"
-          f"FPS {int(total_num_steps / time_elapsed)}")
+def log_progress(update_number, rewards_history, value_loss, action_loss, dist_entropy):
+    print(f"Updates {update_number}, \t")
 
-    multi_sided_rewards = np.array(episode_rewards)
-    print(f"Last {len(episode_rewards)} episodes reward: "
+    multi_sided_rewards = np.array(rewards_history)
+    print(f"Last {len(rewards_history)} episodes reward: "
           f"min {np.min(multi_sided_rewards, axis=0)}, \t"
           f"median {np.median(multi_sided_rewards, axis=0)}, \t"
           f"avg {np.mean(multi_sided_rewards, axis=0)}, \t"
@@ -92,16 +82,5 @@ def log_progress(args, update_number, episode_rewards, time_elapsed,
     print()
 
 
-def cleanup_log_dir(log_dir):
-    try:
-        os.makedirs(log_dir)
-    except OSError:
-        files = glob.glob(os.path.join(log_dir, '*.monitor.csv'))
-        for f in files:
-            os.remove(f)
-
-
 if __name__ == "__main__":
-    main()
-    """ Test with `--algo=ppo --num-processes=4 --num-mini-batch=16 --num-env-steps=2000 --env-name=CartPole-v1`, 
-        should achieve 88 max reward, 47.9 avg reward """
+    main(argv[1])

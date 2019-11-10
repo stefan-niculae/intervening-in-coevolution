@@ -1,53 +1,29 @@
 """ Run multiple copies of an environment in parallel """
 
-import gym
-import numpy as np
 import torch
 from baselines.common.vec_env import VecEnvWrapper
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
-# from baselines.common.vec_env.shmem_vec_env import ShmemVecEnv
-from baselines.common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 
 from environment.utils import make_env
 
 
-def make_vec_envs(env_name,
-                  seed,
-                  num_processes,
-                  gamma,
-                  log_dir,
-                  device,
-                  allow_early_resets,
-                  num_frame_stack=None):
+def make_vec_envs(config, device) -> 'VecEnv':
     envs = [
-        make_env(env_name, seed, i, log_dir, allow_early_resets)
-        for i in range(num_processes)
+        make_env(config.scenario, config.seed, proc_number)
+        for proc_number in range(config.num_processes)
     ]
 
     dummy_env = envs[0]()
-    if hasattr(dummy_env, 'num_avatars'):
-        num_avatars = dummy_env.num_avatars
-    else:
-        num_avatars = 1
+    num_avatars = dummy_env.num_avatars
 
     if len(envs) > 1:
         envs = SubprocVecEnv(envs)
     else:
         envs = DummyVecEnv(envs)
 
-    # TODO reimplement this (?)
-    # if len(envs.observation_space.shape) == 1:
-    #     if gamma is None:
-    #         envs = VecNormalize(envs, ret=False)
-    #     else:
-    #         envs = VecNormalize(envs, gamma=gamma)
-
     envs = VecEnv(envs, device)
     envs.num_avatars = num_avatars
-
-    # if num_frame_stack is not None:
-    #     envs = VecFrameStack(envs, num_frame_stack, device)
 
     return envs
 
@@ -81,6 +57,7 @@ class VecEnv(VecEnvWrapper):
         return obs, reward, done, info
 
 
+# TODO reimplement this (?)
 # class VecNormalize(VecNormalize_):
 #     """ Normalize observations and returns
 #     :param gamma (float): discount factor (default 0.99)

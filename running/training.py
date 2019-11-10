@@ -3,109 +3,77 @@
 import numpy as np
 import torch
 
-from environment.parallelization import make_vec_envs
+from environment.parallelization import make_vec_envs, VecEnv
 from agent.policies import Policy
-from agent.algorithms import PPO, A2C_ACKTR
+from agent.algorithms import PPO
 from agent.storage import RolloutStorage
 
 
-def instantiate(args, device):
+def instantiate(config, device):
     """ Instantiate the environment, policy, agent, storage """
-    envs = make_vec_envs(args.env_name, args.seed, args.num_processes,
-                         args.gamma, args.log_dir, device, False)
+    envs = make_vec_envs(config, device)
 
-    actor_critic = Policy(
+    policy = Policy(
         envs.observation_space.shape,
         envs.action_space,
-        num_controllers=2,
-        base_kind=args.policy_base,
-        base_kwargs={'recurrent': args.recurrent_policy})
-    actor_critic.to(device)
+        num_controllers=2,  # TODO don't hardcode this
+        controller_kind=config.controller,
+        controller_kwargs={'is_recurrent': False})
+    policy.to(device)
 
-    if args.algo == 'a2c':
-        agent = A2C_ACKTR(
-            actor_critic,
-            args.value_loss_coef,
-            args.entropy_coef,
-            lr=args.lr,
-            eps=args.optim_eps,
-            alpha=args.rmsprop_alpha,
-            max_grad_norm=args.max_grad_norm)
+    if config.algorithm != 'PPO':
+        raise NotImplemented
+    agent = PPO(policy, config)
 
-    elif args.algo == 'ppo':
-        agent = PPO(
-            actor_critic,
-            args.clip_param,
-            args.ppo_epoch,
-            args.num_mini_batch,
-            args.value_loss_coef,
-            args.entropy_coef,
-            lr=args.lr,
-            eps=args.optim_eps,
-            max_grad_norm=args.max_grad_norm)
-
-    elif args.algo == 'acktr':
-        agent = A2C_ACKTR(
-            actor_critic, args.value_loss_coef, args.entropy_coef, acktr=True)
-
-    rollouts = RolloutStorage(args.num_steps, args.num_processes,
-                              envs.num_avatars, envs.observation_space.shape, envs.action_space,
-                              actor_critic.recurrent_hidden_state_size, args.use_proper_time_limits)
+    rollouts = RolloutStorage(config,
+        envs.num_avatars, envs.observation_space.shape, envs.action_space,
+        policy.recurrent_hidden_state_size)
 
     obs = envs.reset()
-    rollouts.obs[0].copy_(obs)
+    rollouts.env_state[0].copy_(obs)
 
-    return envs, actor_critic, agent, rollouts
+    lr_decay = torch.optim.lr_scheduler.StepLR(
+        agent.optimizer, config.lr_decay_interval, config.lr_decay_factor)
+
+    return envs, policy, agent, rollouts, lr_decay
 
 
-def perform_update(args, envs, actor_critic, agent, rollouts, update_number, n_updates, episode_rewards):
+def perform_update(config, envs: VecEnv, policy: Policy, agent: PPO, rollouts: RolloutStorage, rewards_history: list):
     """ Runs the agent on the env and updates the model """
-    if args.use_linear_lr_decay:
-        # decrease learning rate linearly
-        decay_lr(agent.optimizer, update_number, n_updates,
-                 agent.optimizer.lr if args.algo == "acktr" else args.lr)
-
-    for step in range(args.num_steps):
+    for step in range(config.num_transitions - 1):
         # Sample actions
         with torch.no_grad():
-            value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(
-                rollouts.controller[step], rollouts.obs[step], rollouts.recurrent_hidden_states[step], rollouts.masks[step])
+            value_pred, action, action_prob, rec_state = policy.pick_action(
+                rollouts.controller[step],
+                rollouts.env_state[step],
+                rollouts.rec_state[step],
+                rollouts.done[step])
 
         # Simulate the environment
-        obs, reward, all_done, infos = envs.step(action)
+        env_state, reward, all_done, infos = envs.step(action)
         reward = torch.transpose(reward, 1, 2)
 
         for info in infos:
             if 'episode' in info.keys():
                 # TODO do this for our custom env
-                episode_rewards.append(info['episode']['r'])
+                rewards_history.append(info['episode']['r'])
 
-        masks = torch.FloatTensor([i['individual_done'] for i in infos])
-        masks.unsqueeze_(-1)
-
+        # Gather extra return values from all processes
+        individual_done = torch.FloatTensor([i['individual_done'] for i in infos])
+        individual_done.unsqueeze_(-1)
         controller = np.array([i['controller'] for i in infos])
 
-        if args.use_proper_time_limits:
-            bad_masks = torch.FloatTensor([[0] if 'bad_transition' in i else [1] for i in infos])
-        else:
-            bad_masks = None
-        rollouts.insert(obs, recurrent_hidden_states, action, action_log_prob, value, reward, masks, bad_masks, controller)
+        rollouts.insert(env_state, rec_state, action, action_prob, value_pred, reward, individual_done, controller)
 
+    # Estimate value of env state we arrived in
     with torch.no_grad():
-        next_value = actor_critic.get_value(
-            rollouts.controller[-1], rollouts.obs[-1], rollouts.recurrent_hidden_states[-1], rollouts.masks[-1]).detach()
-
-    rollouts.compute_returns(next_value, args.use_gae, args.gamma, args.gae_lambda)
+        next_value = policy.get_value(
+            rollouts.controller[-1],
+            rollouts.env_state[-1],
+            rollouts.rec_state[-1],
+            rollouts.done[-1]).detach()
+    rollouts.compute_returns(next_value)
 
     value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
-    rollouts.after_update()
-
     return value_loss, action_loss, dist_entropy
-
-
-def decay_lr(optimizer, epoch, total_num_epochs, initial_lr):
-    """ Decay the learning rate linearly """
-    lr = initial_lr - (initial_lr * (epoch / float(total_num_epochs)))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
