@@ -13,6 +13,18 @@ ScenarioConfig = namedtuple('ScenarioConfig', 'width height n_thieves n_guardian
 
 
 _fixed_scenario_maps = {
+    '4x4-test-movements': [
+        [_, _, _, _],
+        [_, T, _, _],
+        [_, _, G, _],
+        [_, _, _, _],
+    ],
+    '4x4-test-rewards': [
+        [_, S, _, _],
+        [_, T, _, _],
+        [_, G, _, _],
+        [_, _, _, _],
+    ],
     '4x4-thief-treasure': [
         [T, _, _, _],
         [_, _, _, _],
