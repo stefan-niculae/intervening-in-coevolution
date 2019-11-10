@@ -1,5 +1,4 @@
 """ Functions to instantiate and handle environments """
-import os
 import time
 from baselines import bench
 
@@ -7,21 +6,12 @@ from environment.ThievesGuardiansEnv import ThievesGuardiansEnv
 from environment.visualization import EnvVisualizationWrapper
 
 
-def make_env(env_name, seed, env_id, log_dir, allow_early_resets, visualization_wrapper=False):
+def make_env(scenario, seed, env_id, visualization_wrapper=False):
     def _thunk():
-        env = ThievesGuardiansEnv(env_name, env_id)
+        env = ThievesGuardiansEnv(scenario, env_id)
         env.seed(seed + env_id)
-
         if visualization_wrapper:
             env = EnvVisualizationWrapper(env)
-        # env = TimeLimitMask(env)
-
-        # TODO implement custom monitor, with vectorized reward
-        if log_dir is not None:
-            env = MultiAgentMonitor(
-                env,
-                os.path.join(log_dir, str(env_id)),
-                allow_early_resets=allow_early_resets)
         return env
 
     return _thunk
@@ -48,17 +38,6 @@ class MultiAgentMonitor(bench.Monitor):
                 info['episode'] = epinfo
 
         self.total_steps += 1
-
-
-# TODO understand what's happening with 'bad_transition' in main.py, and consider using this, by adding to our Env_max_episode_steps and _elapsed_steps to use this
-# class TimeLimitMask(gym.Wrapper):
-#     """ Checks whether done was caused by time limits """
-#     def step(self, action):
-#         obs, rew, done, info = self.env.step(action)
-#         if done and self.env._max_episode_steps == self.env._elapsed_steps:
-#             info['bad_transition'] = True
-#
-#         return obs, rew, done, info
 
 
 def get_render_func(venv):

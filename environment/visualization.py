@@ -10,7 +10,8 @@ import gym
 from IPython import display as ipythondisplay
 from IPython.display import HTML
 from gym.wrappers import Monitor
-from environment.utils import make_env
+
+from configs.paths import VIDEOS
 
 
 class EnvVisualizationWrapper(gym.Wrapper):
@@ -52,7 +53,6 @@ class EnvVisualizationWrapper(gym.Wrapper):
         w = self.unwrapped.width  # width
         h = self.unwrapped.height  # height
         map = self.unwrapped.map
-        id2team = self.unwrapped.id2team
         pos2id = self.unwrapped.pos2id
 
         # Each cells shows the id of the avatar that is there
@@ -132,12 +132,19 @@ class EnvVisualizationWrapper(gym.Wrapper):
             return np.array(fig.canvas.renderer.buffer_rgba())
         return
 
-def wrap_env_video(env):
-  env = MultiAgent_VideoMonitor(env, './video', force=True)
-  return env
 
-def gen_wrapped_env():
-    return wrap_env_video(make_env("ThievesGuardiansEnv",0,0,None,False)())
+def wrap_env_video(env):
+    return MultiAgent_VideoMonitor(env, VIDEOS, force=True)
+
+
+# def gen_wrapped_env():
+#     return wrap_env_video(make_env(
+#         scenario='random-s',  # TODO get from config?
+#         seed=0,
+#         env_id=0,
+#         visualization_wrapper=False,
+#     )())
+
 
 class MultiAgent_VideoMonitor(Monitor):
     def _after_step(self, observation, reward, done, info):
@@ -182,7 +189,7 @@ def log_policy_rollout(policy, pytorch_policy=False):
         #    action = policy.act(observation)[0].data.cpu().numpy()
         # else:
         #    action = policy.act(observation)[0]
-        action = policy.act(observation)
+        action = policy.pick_action(observation)
         observation, reward, done, info = env.step(action)
         episode_reward += reward
         episode_length += 1
