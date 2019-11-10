@@ -10,6 +10,7 @@ import gym
 from IPython import display as ipythondisplay
 from IPython.display import HTML
 from gym.wrappers import Monitor
+from environment.utils import make_env
 
 
 class EnvVisualizationWrapper(gym.Wrapper):
