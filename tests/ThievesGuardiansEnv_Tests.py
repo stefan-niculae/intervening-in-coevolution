@@ -38,6 +38,95 @@ class MovementTests(unittest.TestCase):
   def test_move_left(self):
     """Test moving left for thief and guardian."""
     self.basic_movement([LEFT, LEFT], action_idx2delta[LEFT])
+  
+  def test_move_thief_wall_left(self):
+    """Test thief bumping into left wall."""
+    self._env.step([LEFT, NOOP])
+    self._env.step([LEFT, NOOP])
+    self._env.step([LEFT, NOOP])
+    
+    curr_thief_pos = self._env._id2pos[0]
+    expected_pos = (1, 0)
+    self.assertEqual(curr_thief_pos, expected_pos)
+  
+  def test_move_thief_wall_up(self):
+    """Test thief bumping into top wall"""
+    self._env.step([UP, NOOP])
+    self._env.step([UP, NOOP])
+    self._env.step([UP, NOOP])
+    
+    curr_thief_pos = self._env._id2pos[0]
+    expected_pos = (0, 1)
+    self.assertEqual(curr_thief_pos, expected_pos)
+
+  def test_move_thief_wall_down(self):
+    """Test thief bumping into bottom wall"""
+    self._env.step([DOWN, NOOP])
+    self._env.step([DOWN, NOOP])
+    self._env.step([DOWN, NOOP])
+    
+    curr_thief_pos = self._env._id2pos[0]
+    expected_pos = (3, 1)
+    self.assertEqual(curr_thief_pos, expected_pos)
+
+  def test_move_thief_wall_right(self):
+    """Test thief bumping into right wall"""
+    self._env.step([RIGHT, NOOP])
+    self._env.step([RIGHT, NOOP])
+    self._env.step([RIGHT, NOOP])
+    
+    curr_thief_pos = self._env._id2pos[0]
+    expected_pos = (1, 3)
+    self.assertEqual(curr_thief_pos, expected_pos)
+
+  def test_move_guardian_wall_left(self):
+    """Test guardian bumping into left wall."""
+    self._env.step([NOOP, LEFT])
+    self._env.step([NOOP, LEFT])
+    self._env.step([NOOP, LEFT])
+    
+    curr_guardian_pos = self._env._id2pos[1]
+    expected_pos = (2, 0)
+    self.assertEqual(curr_guardian_pos, expected_pos)
+  
+  def test_move_guardian_wall_up(self):
+    """Test guardian bumping into top wall"""
+    self._env.step([NOOP, UP])
+    self._env.step([NOOP, UP])
+    self._env.step([NOOP, UP])
+    
+    curr_guardian_pos = self._env._id2pos[1]
+    expected_pos = (0, 2)
+    self.assertEqual(curr_guardian_pos, expected_pos)
+
+  def test_move_guardian_wall_down(self):
+    """Test guardian bumping into bottom wall"""
+    self._env.step([NOOP, DOWN])
+    self._env.step([NOOP, DOWN])
+    self._env.step([NOOP, DOWN])
+    
+    curr_guardian_pos = self._env._id2pos[1]
+    expected_pos = (3, 2)
+    self.assertEqual(curr_guardian_pos, expected_pos)
+
+  def test_move_guardian_wall_right(self):
+    """Test guardian bumping into right wall"""
+    self._env.step([NOOP, RIGHT])
+    self._env.step([NOOP, RIGHT])
+    self._env.step([NOOP, RIGHT])
+
+    curr_guardian_pos = self._env._id2pos[1]
+    expected_pos = (2, 3)
+    self.assertEqual(curr_guardian_pos, expected_pos)
+  
+  def test_move_guardian_treasure(self):
+    """Test guardian bumping into treasure."""
+    self._env.step([NOOP, DOWN])
+    self._env.step([NOOP, RIGHT])
+
+    curr_guardian_pos = self._env._id2pos[1]
+    expected_pos = (3, 2)
+    self.assertEqual(curr_guardian_pos, expected_pos)
 
 
 class RewardsTests(unittest.TestCase):
@@ -71,6 +160,39 @@ class RewardsTests(unittest.TestCase):
       _, reward, done, _ = self._env.step([NOOP, NOOP])
     
     self.assertEqual(tuple(reward), REWARDS['out_of_time'])
+
+
+class GameEndTests(unittest.TestCase):
+  def setUp(self):
+    """Create simple environment to test end game scenarios."""
+    self._env = ThievesGuardiansEnv('4x4-test-rewards', env_id=0)
+  
+  def test_end_out_of_time(self):
+    """Test that after time limit the game is done."""
+    # Perform no movements for the max number of steps
+    done = False
+    for _ in range(self._env.time_limit):
+      _, _, done, _ = self._env.step([NOOP, NOOP])
+    
+    self.assertTrue(done)
+  
+  def test_end_guardian_catches_thief(self):
+    """Test that when guardian catches last thief game is done."""
+    _, _, done, _ = self._env.step([NOOP, UP])
+
+    self.assertTrue(done)
+  
+  def test_end_thief_runs_into_guard(self):
+    """Test that when last thief kills self game is done."""
+    _, _, done, _ = self._env.step([DOWN, NOOP])
+
+    self.assertTrue(done)
+  
+  def test_end_thief_finds_treasure(self):
+    """Test that when thief finds treasure game is done."""
+    _, _, done, _ = self._env.step([UP, NOOP])
+
+    self.assertTrue(done)
   
 
 if __name__ == '__main__':
