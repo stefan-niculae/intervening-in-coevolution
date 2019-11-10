@@ -32,7 +32,7 @@ action_idx2delta = {
 REWARDS = {
     'killed':      (-1, +1),
     'out_of_time': (-5, +5),
-    'treasure':    (+9,  0),
+    'treasure':    (+9,  0),  # TODO: should guardians get a negative reward here?
 }
 
 DEBUG = False
@@ -197,7 +197,7 @@ class ThievesGuardiansEnv(Env):
         # When moved out of the map (killed)
         if new_pos is None:
             self._avatar_alive[avatar_id] = False
-            self._id2team[avatar_id] = None
+            #self._id2team[avatar_id] = None
 
         # When moved to a new valid position
         else:
