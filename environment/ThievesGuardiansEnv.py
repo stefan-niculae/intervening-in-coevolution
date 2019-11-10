@@ -301,7 +301,7 @@ class ThievesGuardiansEnv(Env):
                 continue
 
         # No more thieves alive, the game is over (thieves and guardians have been rewarded at the moments of killing)
-        if sum(self._avatar_alive) == 0:
+        if sum(self._avatar_alive) == self._n_guardians:
             info['end_reason'] = 'All thieves dead'
             individual_done[:] = True
 
