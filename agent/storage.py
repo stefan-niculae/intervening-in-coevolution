@@ -115,6 +115,7 @@ class RolloutStorage:
                                mini_batch_size=None):
         batch_size = self.num_processes * self.num_steps * self.num_avatars
 
+        # TODO understand mini batch size and num steps
         if mini_batch_size is None:
             assert batch_size >= num_mini_batch, (
                 f"PPO requires the number of processes ({self.num_processes}) "

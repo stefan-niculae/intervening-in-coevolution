@@ -53,8 +53,8 @@ def fixed_scenario_config(name):
     return ScenarioConfig(
         width=map.shape[0],
         height=map.shape[1],
-        n_thieves=sum(map == T),
-        n_guardians=sum(map == G),
+        n_thieves=np.sum(map == T),
+        n_guardians=np.sum(map == G),
         wall_density=(map == W).mean(),
         time_limit=999,
         fixed_map=map,

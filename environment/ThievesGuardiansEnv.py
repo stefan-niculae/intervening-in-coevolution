@@ -157,7 +157,6 @@ class ThievesGuardiansEnv(Env):
             # Place walls
             wall_mask = np.random.rand(self._width, self._height) < self._wall_density
             self._map[wall_mask] = WALL
-            self._walls_channel = wall_mask.astype(float)
 
             # Pick areas for the teams and treasure
             thieves_quad, guardians_quad, treasure_quad = np.random.choice(4, size=3, replace=False)
@@ -175,8 +174,9 @@ class ThievesGuardiansEnv(Env):
                 x, y = self._random_empty_cell(guardians_quad)
                 self._map[x, y] = GUARDIAN
 
-        # Precompute treasure channel since it's static
+        # Precompute treasure and wall channels since it's static
         self._treasure_channel = (self._map == TREASURE).astype(int)
+        self._walls_channel    = (self._map == WALL)    .astype(int)
 
         # Set avatar position bidirectional caches (first thieves then guardians)
         xs_t, ys_t = np.where(self._map == THIEF)
@@ -193,9 +193,13 @@ class ThievesGuardiansEnv(Env):
     def _move_or_kill(self, avatar_id, avatar_team, old_pos, new_pos=None):
         self._map[old_pos] = EMPTY
         del self._pos2id[old_pos]
+
+        # When moved out of the map (killed)
         if new_pos is None:
             self._avatar_alive[avatar_id] = False
             self._id2team[avatar_id] = None
+
+        # When moved to a new valid position
         else:
             self._map[new_pos] = avatar_team
             self._id2pos[avatar_id] = new_pos
