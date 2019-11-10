@@ -3,15 +3,12 @@ import time
 from baselines import bench
 
 from environment.ThievesGuardiansEnv import ThievesGuardiansEnv
-from environment.visualization import EnvVisualizationWrapper
 
 
-def make_env(scenario, seed, env_id, visualization_wrapper=False):
+def make_env(scenario, seed, env_id):
     def _thunk():
         env = ThievesGuardiansEnv(scenario, env_id)
         env.seed(seed + env_id)
-        if visualization_wrapper:
-            env = EnvVisualizationWrapper(env)
         return env
 
     return _thunk

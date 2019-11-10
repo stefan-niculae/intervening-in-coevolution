@@ -7,11 +7,14 @@ from matplotlib.patches import Patch
 import matplotlib
 import numpy as np
 import gym
+import torch
 from IPython import display as ipythondisplay
 from IPython.display import HTML
 from gym.wrappers import Monitor
 
-from configs.paths import VIDEOS
+from environment.ThievesGuardiansEnv import ThievesGuardiansEnv
+
+matplotlib.use('TkAgg')
 
 
 class EnvVisualizationWrapper(gym.Wrapper):
@@ -50,10 +53,10 @@ class EnvVisualizationWrapper(gym.Wrapper):
 
         # Configuration
         step = self.unwrapped.elapsed_time
-        w = self.unwrapped.width  # width
-        h = self.unwrapped.height  # height
-        map = self.unwrapped.map
-        pos2id = self.unwrapped.pos2id
+        w = self.unwrapped._width  # width
+        h = self.unwrapped._height  # height
+        map = self.unwrapped._map
+        pos2id = self.unwrapped._pos2id
 
         # Each cells shows the id of the avatar that is there
         display_map = np.full(map.shape, fill_value='')
@@ -133,75 +136,55 @@ class EnvVisualizationWrapper(gym.Wrapper):
         return
 
 
-def wrap_env_video(env):
-    return MultiAgent_VideoMonitor(env, VIDEOS, force=True)
-
-
-# def gen_wrapped_env():
-#     return wrap_env_video(make_env(
-#         scenario='random-s',  # TODO get from config?
-#         seed=0,
-#         env_id=0,
-#         visualization_wrapper=False,
-#     )())
-
-
 class MultiAgent_VideoMonitor(Monitor):
     def _after_step(self, observation, reward, done, info):
-        if not self.enabled: return done
-        # if done and self.env_semantics_autoreset:
-        #    # For envs with BlockingReset wrapping VNCEnv, this observation will be the first one of the new episode
-        #    self.reset_video_recorder()
-        #    self.episode_id += 1
-        #    self._flush()
-
-        # Record stat
-        # self.stats_recorder.after_step(observation, sum(reward), done, info)
-        # Record video
-
-        #TODO: I have used multipled capture_frame() to reduce the frame rate of the video, but make this more expensive (in a constant amount)
-        self.video_recorder.capture_frame()
-        self.video_recorder.capture_frame()
-        self.video_recorder.capture_frame()
-        self.video_recorder.capture_frame()
-        self.video_recorder.capture_frame()
-        self.video_recorder.capture_frame()
+        if not self.enabled:
+            return done
+        # multipled capture_frame() to reduce the frame rate of the video, but make this more expensive (in a constant amount)
+        for _ in range(6):
+            self.video_recorder.capture_frame()
         return done
 
 
-# This function plots videos of rollouts (episodes) of a given policy and environment
-def log_policy_rollout(policy, pytorch_policy=False):
-    # Create environment with flat observation
-    env = gen_wrapped_env()
+def film_rollout(config, policy, save_path):
+    """ Roll out one episode and save the video """
+    env = ThievesGuardiansEnv(
+        config.scenario,
+        env_id=0
+    )
+    env.seed(0)
+    unwrapped_env = env
+
+    env = EnvVisualizationWrapper(env)
+    env = MultiAgent_VideoMonitor(env, save_path, force=True)
 
     # Initialize environment
     observation = env.reset()
 
-    done = False
-    episode_reward = 0
-    episode_length = 0
+    batch_size = 1
 
-    # Run until done == True
-    while not done:
-        # Take a step
-        # if pytorch_policy:
-        #    observation = torch.tensor(observation, dtype=torch.float32)
-        #    action = policy.act(observation)[0].data.cpu().numpy()
-        # else:
-        #    action = policy.act(observation)[0]
-        action = policy.pick_action(observation)
-        observation, reward, done, info = env.step(action)
-        episode_reward += reward
-        episode_length += 1
+    all_done = False
+    while not all_done:
+        controller_ids = unwrapped_env._controller
+        env_state = torch.tensor(observation, dtype=torch.float32)
+        rec_state = torch.zeros(batch_size, policy.recurrent_hidden_state_size)
+        individual_done = torch.tensor([unwrapped_env._avatar_alive])
+        _, action, _, _ = policy.pick_action(
+            controller_ids,
+            env_state,
+            rec_state,
+            individual_done,
+            deterministic=True
+        )
+        action = action[0].data.cpu().numpy()
+        observation, _, all_done, _ = env.step(action)
 
-    print('Total reward:', episode_reward)
-    print('Total length:', episode_length)
     env.close()
-    show_video()
+    show_video(save_path)
 
 
-def show_video():
-    mp4list = glob.glob('video/*.mp4')
+def show_video(path):
+    mp4list = glob.glob(path + '/*.mp4')
     if len(mp4list) > 0:
         mp4 = mp4list[0]
         video = io.open(mp4, 'r+b').read()

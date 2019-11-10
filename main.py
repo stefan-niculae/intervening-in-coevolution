@@ -7,9 +7,9 @@ import numpy as np
 import torch
 
 from configs.structure import Config
-from configs.paths import MODEL_CHECKPOINTS, LOGS
+from configs.paths import MODEL_CHECKPOINTS, LOGS, VIDEOS
 from running.training import instantiate, perform_update
-
+from environment.visualization import film_rollout
 
 LAST_N_REWARDS = 10
 
@@ -37,6 +37,9 @@ def main(config_path: str):
 
         lr_decay.step(update_number)
         rollouts.clear()
+
+        if update_number % config.eval_interval == 0:
+            film_rollout(config, policy, VIDEOS)
 
         # # save for every interval-th episode or for the last epoch
         # if (update_number % config.save_interval == 0

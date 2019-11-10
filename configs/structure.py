@@ -71,3 +71,6 @@ class Config:
 
     # After how many updates to save the model
     save_interval = 10
+
+    # After how many updates to evaluate (run deterministically) and save a video
+    eval_interval = 5

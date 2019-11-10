@@ -48,7 +48,17 @@ class Policy(nn.Module):
         raise NotImplementedError
 
     def _run_controllers(self, controller_ids, env_state, rec_state_input, done):
-        """ Distribute the load to each controller and then merge them back """
+        """
+        Distribute the load to each controller and then merge them back
+
+        :param controller_ids: numpy array of shape [batch_size,]
+        :param env_state:  tensor of shape [batch_size, C, W, H]
+        :param rec_state_input: tensor of shape [batch_size, env.rec_state_size]
+        :param done: tensor of shape [batch_size, 1]
+
+        `batch_size` can also be two dimensional and will be flattened (just the first two dims)
+
+        """
         first_two_dims = None
         batch_size = env_state.size(0)
         if len(env_state.shape) == 5:

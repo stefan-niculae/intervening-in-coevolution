@@ -1,8 +1,9 @@
 {
   "scenario": "4x4-thief-treasure",
   "num_processes": 2,
-  "num_updates": 10,
+  "num_updates": 2,
   "num_transitions": 1000,
   "num_batches": 2,
-  "batch_size": 256
+  "batch_size": 256,
+  "eval_interval": 2
 }
