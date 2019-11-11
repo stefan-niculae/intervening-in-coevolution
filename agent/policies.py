@@ -8,7 +8,7 @@ from agent.controllers import FCController, ConvController
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_shape, action_space, num_controllers, controller_kind, controller_kwargs=None):
+    def __init__(self, obs_shape, action_space, num_controllers: int, controller_kind, controller_kwargs=None):
         super().__init__()
 
         if controller_kind == 'fc':

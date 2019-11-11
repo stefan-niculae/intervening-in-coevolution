@@ -68,13 +68,14 @@ _fixed_scenario_maps = {
 
 def fixed_scenario_config(name):
     map = np.array(_fixed_scenario_maps[name])
+    time_limit = map.shape[0] * map.shape[1] * 2
     return ScenarioConfig(
         width=map.shape[0],
         height=map.shape[1],
         n_thieves=np.sum(map == T),
         n_guardians=np.sum(map == G),
         wall_density=(map == W).mean(),
-        time_limit=999,
+        time_limit=time_limit,
         fixed_map=map,
     )
 

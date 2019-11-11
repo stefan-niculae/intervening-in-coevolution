@@ -19,3 +19,10 @@ Requires Python 3.7
 If your model uses convolutions, [torch.nn.Conv2d](https://pytorch.org/docs/stable/nn.html#conv2d) expects channels first.
 
 Agent algorithms source: https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail
+
+
+## Running
+
+1. Run `python main.py configs/your-config.json`
+   - Edit `configs/your-config.json` as you see fit   
+3. Check logs ``

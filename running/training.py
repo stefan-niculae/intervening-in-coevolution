@@ -38,8 +38,12 @@ def instantiate(config, device):
     return envs, policy, agent, rollouts, lr_decay
 
 
-def perform_update(config, envs: VecEnv, policy: Policy, agent: PPO, rollouts: RolloutStorage, rewards_history: list):
+def perform_update(config, envs: VecEnv, policy: Policy, agent: PPO, rollouts: RolloutStorage):
     """ Runs the agent on the env and updates the model """
+
+    episode_number_history = np.zeros((config.num_transitions - 1, config.num_processes))
+    current_episode_number = np.zeros(config.num_processes)
+
     for step in range(config.num_transitions - 1):
         # Sample actions
         with torch.no_grad():
@@ -53,17 +57,16 @@ def perform_update(config, envs: VecEnv, policy: Policy, agent: PPO, rollouts: R
         env_state, reward, all_done, infos = envs.step(action)
         reward = torch.transpose(reward, 1, 2)
 
-        for info in infos:
-            if 'episode' in info.keys():
-                # TODO do this for our custom env
-                rewards_history.append(info['episode']['r'])
-
         # Gather extra return values from all processes
         individual_done = torch.FloatTensor([i['individual_done'] for i in infos])
         individual_done.unsqueeze_(-1)
         controller = np.array([i['controller'] for i in infos])
 
         rollouts.insert(env_state, rec_state, action, action_prob, value_pred, reward, individual_done, controller)
+
+        episode_number_history[step] = current_episode_number.copy()
+        # When one of the environments is done, increment its run number
+        current_episode_number += all_done
 
     # Estimate value of env state we arrived in
     with torch.no_grad():
@@ -76,4 +79,5 @@ def perform_update(config, envs: VecEnv, policy: Policy, agent: PPO, rollouts: R
 
     value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
-    return value_loss, action_loss, dist_entropy
+    return value_loss, action_loss, dist_entropy, episode_number_history
+

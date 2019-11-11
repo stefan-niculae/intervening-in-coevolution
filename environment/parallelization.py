@@ -16,6 +16,7 @@ def make_vec_envs(config, device) -> 'VecEnv':
 
     dummy_env = envs[0]()
     num_avatars = dummy_env.num_avatars
+    time_limit = dummy_env.time_limit
 
     if len(envs) > 1:
         envs = SubprocVecEnv(envs)
@@ -24,6 +25,7 @@ def make_vec_envs(config, device) -> 'VecEnv':
 
     envs = VecEnv(envs, device)
     envs.num_avatars = num_avatars
+    envs.time_limit = time_limit
 
     return envs
 

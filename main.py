@@ -1,15 +1,17 @@
 """ Gathers arguments, runs learning steps, defines reporting and other I/O """
 import json
 from sys import argv
-from collections import deque
 
 import numpy as np
 import torch
+from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm as progress_bar
 
 from configs.structure import Config
 from configs.paths import MODEL_CHECKPOINTS, LOGS, VIDEOS
 from running.training import instantiate, perform_update
-from environment.visualization import film_rollout
+from running.visualization import write_summary
+from environment.visualization import record_rollout
 
 LAST_N_REWARDS = 10
 
@@ -28,26 +30,29 @@ def main(config_path: str):
     envs, policy, agent, rollouts, lr_decay = instantiate(config, device)
     rollouts.to(device)
 
-    # For logging
-    rewards_history = deque(maxlen=LAST_N_REWARDS)
+    writer = SummaryWriter('outputs/logs')
 
-    for update_number in range(config.num_updates):
-        value_loss, action_loss, dist_entropy = perform_update(
-            config, envs, policy, agent, rollouts, rewards_history)
+    for update_number in progress_bar(range(config.num_updates)):
+        is_last_update = (update_number == config.num_updates - 1)
+
+        value_loss, action_loss, dist_entropy, episode_number_history = perform_update(
+            config, envs, policy, agent, rollouts)
 
         lr_decay.step(update_number)
-        rollouts.clear()
 
-        if update_number % config.eval_interval == 0:
-            film_rollout(config, policy, VIDEOS)
+        if update_number % config.log_interval == 0:
+            write_summary(config, envs, rollouts, episode_number_history, writer, update_number)
 
-        # # save for every interval-th episode or for the last epoch
+        if is_last_update: #update_number % config.eval_interval == 0:
+            record_rollout(config, policy, VIDEOS)
+
+        # Save for every interval-th episode or for the last epoch
         # if (update_number % config.save_interval == 0
         #         or update_number == config.num_updates - 1):
         #     save_model(MODEL_CHECKPOINTS, envs, policy)
+        rollouts.clear()
 
-        if update_number % config.log_interval == 0 and len(rewards_history) > 1:
-            log_progress(update_number, rewards_history, value_loss, action_loss, dist_entropy)
+    print('Did', config.num_updates, 'updates successfully.')
 
 
 def read_config(config_path: str) -> Config:

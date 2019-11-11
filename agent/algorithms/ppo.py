@@ -17,7 +17,7 @@ class PPO:
 
         # TODO is this right? a single optimizer?
         self.optimizer = optim.Adam(
-            self.policy.parameters(),
+            sum([list(c.parameters()) for c in self.policy.controllers], []),
             lr=config.lr,
             eps=config.adam_epsilon,
         )

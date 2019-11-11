@@ -13,18 +13,18 @@ GUARDIAN = 3
 TREASURE = 4
 
 # Actions
-NOOP  = 0
-UP    = 1
-DOWN  = 2
-LEFT  = 3
-RIGHT = 4
+UP    = 0
+DOWN  = 1
+LEFT  = 2
+RIGHT = 3
+# NOOP  = 4
 
 action_idx2delta = {
-    NOOP:  np.array([ 0,  0]),
     UP:    np.array([-1,  0]),
     DOWN:  np.array([+1,  0]),
     LEFT:  np.array([ 0, -1]),
     RIGHT: np.array([ 0, +1]),
+    # NOOP:  np.array([ 0,  0]),
 }
 
 
@@ -40,7 +40,7 @@ dump_path = 'outputs/execution-#%d'
 
 
 class ThievesGuardiansEnv(Env):
-    """ Thieves aim to reach a trueasure, guardians aim to catch the thieves """
+    """ Thieves aim to reach a treasure, guardians aim to catch the thieves """
 
     """
     A single controllable character; either a thief or a guardian
@@ -68,7 +68,7 @@ class ThievesGuardiansEnv(Env):
             self._quadrant_ranges = self._compute_quadrants()
             self._wall_density = config.wall_density
 
-        self.time_limit = config.time_limit  # TODO look at TimeLimitMask EnvWrapper to see expected names
+        self.time_limit = config.time_limit
         self.elapsed_time = None
 
         self._n_thieves = config.n_thieves
@@ -80,7 +80,7 @@ class ThievesGuardiansEnv(Env):
         self._dummy_dead_state = np.full((5, self._width, self._height), np.nan)
 
         self._id2team = np.array([THIEF] * self._n_thieves + [GUARDIAN] * self._n_guardians)
-        self._controller = (self._id2team == THIEF).astype(np.uint8)  # zero/one, used to select model
+        self._controller = (self._id2team == GUARDIAN).astype(np.uint8)  # 0 for thieves, 1 for guardians
 
         self._n_remaining_thieves = None
         self._avatar_alive = None
@@ -220,7 +220,7 @@ class ThievesGuardiansEnv(Env):
             infos['individual_done']: (num_avatars,)
 
         """
-        info = {'controller': self._controller}
+        info = {'controller': self._controller}  # for two thieves and one guardian: [0, 0, 1]
         individual_done = np.zeros(self.num_avatars, bool)
         reward          = np.zeros(self.num_avatars, float)
 
@@ -343,7 +343,6 @@ class ThievesGuardiansEnv(Env):
             4. walls
             5. treasure
         """
-        # TODO flat version of the state, but somehow handle the fact that thieves can die; also must have a fixed number of obstacles; and the coordinates should be normalized to (-1, +1) on both x and y axes
         own_pos  = self._id2pos [for_id]
         own_team = self._id2team[for_id]
         opposing_team = GUARDIAN if own_team == THIEF else THIEF

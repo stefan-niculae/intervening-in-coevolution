@@ -110,7 +110,7 @@ class ConvController(NNController):
             # init_(nn.Conv2d(num_inputs, 16, kernel_size=3, stride=1)),
             # nn.ReLU(),
             Flatten(),
-            init_(nn.Linear(256, hidden_size)),
+            init_(nn.Linear(576, hidden_size)),
             nn.ReLU(),
         )
 

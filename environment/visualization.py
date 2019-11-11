@@ -18,7 +18,6 @@ matplotlib.use('TkAgg')
 
 
 class EnvVisualizationWrapper(gym.Wrapper):
-
     def render(self, *args, **kwargs):
         if 'mode' in kwargs:
             mode = kwargs['mode']
@@ -146,7 +145,7 @@ class MultiAgent_VideoMonitor(Monitor):
         return done
 
 
-def film_rollout(config, policy, save_path):
+def record_rollout(config, policy, save_path):
     """ Roll out one episode and save the video """
     env = ThievesGuardiansEnv(
         config.scenario,
@@ -161,26 +160,24 @@ def film_rollout(config, policy, save_path):
     # Initialize environment
     observation = env.reset()
 
-    batch_size = 1
-
     all_done = False
     while not all_done:
         controller_ids = unwrapped_env._controller
         env_state = torch.tensor(observation, dtype=torch.float32)
-        rec_state = torch.zeros(batch_size, policy.recurrent_hidden_state_size)
-        individual_done = torch.tensor([unwrapped_env._avatar_alive])
+        rec_state = torch.zeros(unwrapped_env.num_avatars, policy.recurrent_hidden_state_size)
+        individual_done = torch.tensor([unwrapped_env._avatar_alive]).transpose(0, 1)
         _, action, _, _ = policy.pick_action(
             controller_ids,
             env_state,
             rec_state,
             individual_done,
-            deterministic=True
+            # deterministic=True
         )
-        action = action[0].data.cpu().numpy()
+        action = action.numpy().flatten()
         observation, _, all_done, _ = env.step(action)
 
     env.close()
-    show_video(save_path)
+    #show_video(save_path)
 
 
 def show_video(path):
