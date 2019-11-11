@@ -1,7 +1,7 @@
 import pandas as pd
 
 
-def write_summary(config, envs, rollouts, episode_number, writer, update_number):
+def write_logs(config, envs, rollouts, episode_number, writer, update_number):
     rewards = rollouts.reward.numpy()
     teams = rollouts.controller[0, 0]  # assumes all envs have the same team orders
 

@@ -1,76 +1,88 @@
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, asdict
 
 
 @dataclass
 class Config:
     # Check scenarios.py for more
-    scenario = '4x4-thief-treasure'
+    scenario: str = '4x4-thief-treasure'
 
     """ Policy """
     # Only one implemented currently
-    algorithm = 'PPO'
+    algorithm: str = 'PPO'
 
     # Update clip param
-    ppo_clip = .2
+    ppo_clip: float = .2
 
     # Only one implemented currently
-    controller = 'conv'
+    controller: str = 'conv'
 
     """ Hardware """
     # Random seed
-    seed = 0
+    seed: int = 0
 
     # CPU processes
-    num_processes = 4
+    num_processes: int = 4
 
     # True not tested
-    cuda = False
+    cuda: bool = False
 
     """ Running """
     # Number of model updates
-    num_updates = 100
+    num_updates: int = 100
 
     # Gather this many transitions before running a model update
-    num_transitions = 1000
+    num_transitions: int = 1000
 
     # Sample this many times per model update (ppo_epoch)
-    num_batches = 5
+    num_batches: int = 5
 
     # Sample this many per batch
-    batch_size = 256
+    batch_size: int = 256
 
     """ Steering """
     # Discount future rewards (gamma)
-    discount = .99
+    discount: float = .99
 
     # Critic
-    critic_coef = .5
+    critic_coef: float = .5
 
     # Encourage "exploration"
-    entropy_coef = .01
+    entropy_coef: float = .01
 
     """ Optimizer """
     # Learning rate
-    lr = 7e-4
+    lr: float = 7e-4
 
     # How often to decay the learning rate
-    lr_decay_interval = 10
+    lr_decay_interval: int = 10
 
     # How much to decay the learning rate
-    lr_decay_factor = .25
+    lr_decay_factor: float = .25
 
     # Adam optimizer parameter
-    adam_epsilon = 1e-5
+    adam_epsilon: float = 1e-5
 
     # Max norm o fthe gradients
-    max_grad_norm = .5
+    max_grad_norm: float = .5
 
     """ Checkpointing """
     # After how many updates to update the progress plot
-    log_interval = 10
+    log_interval: int = 10
 
     # After how many updates to save the model
-    save_interval = 10
+    save_interval: int = 10
 
     # After how many updates to evaluate (run deterministically) and save a video
-    eval_interval = 5
+    eval_interval: int = 5
+
+
+def read_config(config_path: str) -> Config:
+    with open(config_path) as f:
+        dict_obj = json.load(f)
+    return Config(**dict_obj)
+
+
+def save_config(config: Config, save_path: str):
+    with open(save_path, 'w') as f:
+        json.dump(asdict(config), f, indent=4)

@@ -1,5 +1,7 @@
 import glob
+import shutil
 import io
+import tempfile
 import base64
 import matplotlib.pyplot as plt
 import matplotlib.colors
@@ -140,8 +142,8 @@ class MultiAgent_VideoMonitor(Monitor):
         if not self.enabled:
             return done
         # multipled capture_frame() to reduce the frame rate of the video, but make this more expensive (in a constant amount)
-        for _ in range(6):
-            self.video_recorder.capture_frame()
+        # for _ in range(6):
+        self.video_recorder.capture_frame()
         return done
 
 
@@ -155,7 +157,8 @@ def record_rollout(config, policy, save_path):
     unwrapped_env = env
 
     env = EnvVisualizationWrapper(env)
-    env = MultiAgent_VideoMonitor(env, save_path, force=True)
+    tmp_dir = tempfile.mkdtemp()
+    env = MultiAgent_VideoMonitor(env, tmp_dir, force=True)
 
     # Initialize environment
     observation = env.reset()
@@ -177,18 +180,18 @@ def record_rollout(config, policy, save_path):
         observation, _, all_done, _ = env.step(action)
 
     env.close()
-    #show_video(save_path)
+    video_path = glob.glob(tmp_dir + '/*.mp4')[0]
+    shutil.move(video_path, save_path)
+    shutil.rmtree(tmp_dir)
 
 
-def show_video(path):
+def display_ipython_video(path):
     mp4list = glob.glob(path + '/*.mp4')
-    if len(mp4list) > 0:
-        mp4 = mp4list[0]
-        video = io.open(mp4, 'r+b').read()
-        encoded = base64.b64encode(video)
-        ipythondisplay.display(HTML(data='''<video alt="test" autoplay 
-                loop controls style="height: 400px;">
-                <source src="data:video/mp4;base64,{0}" type="video/mp4" />
-             </video>'''.format(encoded.decode('ascii'))))
-    else:
-        print("Could not find video")
+    mp4 = mp4list[0]
+    video = io.open(mp4, 'r+b').read()
+    encoded = base64.b64encode(video)
+    ipythondisplay.display(
+        HTML(data=f'''
+        <video alt="test" autoplay loop controls style="height: 400px;">
+            <source src="data:video/mp4;base64,{encoded.decode('ascii')}" type="video/mp4" />
+        </video>'''))
