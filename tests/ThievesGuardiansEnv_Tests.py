@@ -4,7 +4,7 @@ sys.path.insert(1, 'environment')
 from ThievesGuardiansEnv import *
 
 
-class MovementTests(unittest.TestCase):
+class BasicMovementTests(unittest.TestCase):
   def setUp(self):
     """Create simple environment to test thief and guardian movements."""
     self._env = ThievesGuardiansEnv('4x4-test-movements', env_id=0)
@@ -39,8 +39,8 @@ class MovementTests(unittest.TestCase):
     """Test moving left for thief and guardian."""
     self.basic_movement([LEFT, LEFT], action_idx2delta[LEFT])
   
-  def test_move_thief_wall_left(self):
-    """Test thief bumping into left wall."""
+  def test_move_thief_boundary_left(self):
+    """Test thief bumping into left boundary."""
     self._env.step([LEFT, NOOP])
     self._env.step([LEFT, NOOP])
     self._env.step([LEFT, NOOP])
@@ -49,8 +49,8 @@ class MovementTests(unittest.TestCase):
     expected_pos = (1, 0)
     self.assertEqual(curr_thief_pos, expected_pos)
   
-  def test_move_thief_wall_up(self):
-    """Test thief bumping into top wall"""
+  def test_move_thief_boundary_up(self):
+    """Test thief bumping into top boundary"""
     self._env.step([UP, NOOP])
     self._env.step([UP, NOOP])
     self._env.step([UP, NOOP])
@@ -59,8 +59,8 @@ class MovementTests(unittest.TestCase):
     expected_pos = (0, 1)
     self.assertEqual(curr_thief_pos, expected_pos)
 
-  def test_move_thief_wall_down(self):
-    """Test thief bumping into bottom wall"""
+  def test_move_thief_boundary_down(self):
+    """Test thief bumping into bottom boundary"""
     self._env.step([DOWN, NOOP])
     self._env.step([DOWN, NOOP])
     self._env.step([DOWN, NOOP])
@@ -69,8 +69,8 @@ class MovementTests(unittest.TestCase):
     expected_pos = (3, 1)
     self.assertEqual(curr_thief_pos, expected_pos)
 
-  def test_move_thief_wall_right(self):
-    """Test thief bumping into right wall"""
+  def test_move_thief_boundary_right(self):
+    """Test thief bumping into right boundary"""
     self._env.step([RIGHT, NOOP])
     self._env.step([RIGHT, NOOP])
     self._env.step([RIGHT, NOOP])
@@ -79,8 +79,8 @@ class MovementTests(unittest.TestCase):
     expected_pos = (1, 3)
     self.assertEqual(curr_thief_pos, expected_pos)
 
-  def test_move_guardian_wall_left(self):
-    """Test guardian bumping into left wall."""
+  def test_move_guardian_boundary_left(self):
+    """Test guardian bumping into left boundary."""
     self._env.step([NOOP, LEFT])
     self._env.step([NOOP, LEFT])
     self._env.step([NOOP, LEFT])
@@ -89,8 +89,8 @@ class MovementTests(unittest.TestCase):
     expected_pos = (2, 0)
     self.assertEqual(curr_guardian_pos, expected_pos)
   
-  def test_move_guardian_wall_up(self):
-    """Test guardian bumping into top wall"""
+  def test_move_guardian_boundary_up(self):
+    """Test guardian bumping into top boundary"""
     self._env.step([NOOP, UP])
     self._env.step([NOOP, UP])
     self._env.step([NOOP, UP])
@@ -99,8 +99,8 @@ class MovementTests(unittest.TestCase):
     expected_pos = (0, 2)
     self.assertEqual(curr_guardian_pos, expected_pos)
 
-  def test_move_guardian_wall_down(self):
-    """Test guardian bumping into bottom wall"""
+  def test_move_guardian_boundary_down(self):
+    """Test guardian bumping into bottom boundary"""
     self._env.step([NOOP, DOWN])
     self._env.step([NOOP, DOWN])
     self._env.step([NOOP, DOWN])
@@ -109,8 +109,8 @@ class MovementTests(unittest.TestCase):
     expected_pos = (3, 2)
     self.assertEqual(curr_guardian_pos, expected_pos)
 
-  def test_move_guardian_wall_right(self):
-    """Test guardian bumping into right wall"""
+  def test_move_guardian_boundary_right(self):
+    """Test guardian bumping into right boundary"""
     self._env.step([NOOP, RIGHT])
     self._env.step([NOOP, RIGHT])
     self._env.step([NOOP, RIGHT])
@@ -127,6 +127,50 @@ class MovementTests(unittest.TestCase):
     curr_guardian_pos = self._env._id2pos[1]
     expected_pos = (3, 2)
     self.assertEqual(curr_guardian_pos, expected_pos)
+  
+
+class WallMovementsTests(unittest.TestCase):
+  def setUp(self):
+    """Create simple environment where thief and guardian can't move."""
+    self._env = ThievesGuardiansEnv('4x4-test-movements-walls', env_id=0)
+    self._init_thief_pos = self._env._id2pos[0]
+    self._init_guard_pos = self._env._id2pos[1]
+
+  def test_move_up_to_wall(self):
+    """Move up to a wall."""
+    self._env.step([UP, UP])
+
+    curr_thief_pos = self._env._id2pos[0]
+    curr_guard_pos = self._env._id2pos[1]
+    self.assertEqual(curr_thief_pos, self._init_thief_pos)
+    self.assertEqual(curr_guard_pos, self._init_guard_pos)
+
+  def test_move_down_to_wall(self):
+    """Move down to a wall."""
+    self._env.step([DOWN, DOWN])
+
+    curr_thief_pos = self._env._id2pos[0]
+    curr_guard_pos = self._env._id2pos[1]
+    self.assertEqual(curr_thief_pos, self._init_thief_pos)
+    self.assertEqual(curr_guard_pos, self._init_guard_pos)
+
+  def test_move_left_to_wall(self):
+    """Move left to a wall."""
+    self._env.step([LEFT, LEFT])
+
+    curr_thief_pos = self._env._id2pos[0]
+    curr_guard_pos = self._env._id2pos[1]
+    self.assertEqual(curr_thief_pos, self._init_thief_pos)
+    self.assertEqual(curr_guard_pos, self._init_guard_pos)
+
+  def test_move_right_to_wall(self):
+    """Move up to a wall."""
+    self._env.step([RIGHT, RIGHT])
+
+    curr_thief_pos = self._env._id2pos[0]
+    curr_guard_pos = self._env._id2pos[1]
+    self.assertEqual(curr_thief_pos, self._init_thief_pos)
+    self.assertEqual(curr_guard_pos, self._init_guard_pos)
 
 
 class RewardsTests(unittest.TestCase):
