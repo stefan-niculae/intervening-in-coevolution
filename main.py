@@ -35,7 +35,8 @@ def main(config_path: str):
         lr_decay.step(update_number)
 
         if update_number % config.log_interval == 0 or is_last_update:
-            write_logs(config, envs, rollouts, episode_number_history, logs_writer, update_number)
+            write_logs(config, envs, policy, rollouts, episode_number_history, logs_writer, update_number,
+                       value_loss, action_loss, dist_entropy)
 
         if update_number % config.eval_interval == 0 or is_last_update:
             video_recorder(policy, update_number)
@@ -47,21 +48,6 @@ def main(config_path: str):
 
     logs_writer.close()
     print('Did', config.num_updates, 'updates successfully.')
-
-
-def log_progress(update_number, rewards_history, value_loss, action_loss, dist_entropy):
-    print(f"Updates {update_number}, \t")
-
-    multi_sided_rewards = np.array(rewards_history)
-    print(f"Last {len(rewards_history)} episodes reward: "
-          f"min {np.min(multi_sided_rewards, axis=0)}, \t"
-          f"median {np.median(multi_sided_rewards, axis=0)}, \t"
-          f"avg {np.mean(multi_sided_rewards, axis=0)}, \t"
-          f"max {np.max(multi_sided_rewards, axis=0)}")
-    print(f"value loss {value_loss:.2f}, \t"
-          f"action loss {action_loss:.2f}, \t"
-          f"entropy {dist_entropy:.2f}")
-    print()
 
 
 if __name__ == "__main__":
