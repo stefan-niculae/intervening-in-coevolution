@@ -19,6 +19,12 @@ _fixed_scenario_maps = {
         [_, _, G, _],
         [_, _, _, S],
     ],
+    '4x4-test-movements-walls': [
+        [_, W, _, _],
+        [W, T, W, _],
+        [_, W, G, W],
+        [_, _, W, _],
+    ],
     '4x4-test-rewards': [
         [_, S, _, _],
         [_, T, _, _],
