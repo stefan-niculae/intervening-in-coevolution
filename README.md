@@ -25,4 +25,5 @@ Agent algorithms source: https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gai
 
 1. Run `python main.py configs/your-config.json`
    - Edit `configs/your-config.json` as you see fit   
-3. Check logs ``
+3. Check training progress `tensorboard --logdir=outputs/logs`
+   - and videos in `outputs/videos`
