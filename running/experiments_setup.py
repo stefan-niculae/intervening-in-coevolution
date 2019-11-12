@@ -7,7 +7,8 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from configs.structure import read_config, save_config
-from environment.visualization import record_rollout
+from environment.visualization import create_animation
+from running.evaluation import evaluate
 
 
 _ROOT_DIR = Path('outputs/')
@@ -27,7 +28,7 @@ def paths(config_path):
     models_dir  = experiment_dir / _TRAINED_MODELS_DIR
     videos_dir  = experiment_dir / _VIDEOS_DIR
 
-    videos_path = videos_dir / 'rollout-%d.mp4'
+    videos_path = videos_dir / 'rollout-%d.gif'
     models_path = models_dir / 'checkpoint-%d.tar'
     config_save_path = experiment_dir / 'config.json'
 
@@ -55,8 +56,10 @@ def setup(config_path):
     logs_writer = SummaryWriter(logs_dir)
     save_config(config, config_save_path)
 
-    record_rollout_f = lambda policy, step: record_rollout(config, policy, videos_path % step)
-    save_model_f     = lambda policy, step: save_model(policy, models_path % step)
+    def record_rollout_f(policy, update_step):
+        maps, pos2ids = evaluate(config, policy)
+        create_animation(maps, pos2ids, videos_path % update_step)
+    save_model_f = lambda policy, step: save_model(policy, models_path % step)
 
     return config, logs_writer, record_rollout_f, save_model_f
 

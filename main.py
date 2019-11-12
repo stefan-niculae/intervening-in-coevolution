@@ -1,7 +1,6 @@
 """ Gathers arguments, runs learning steps, defines reporting and other I/O """
 from sys import argv
 
-import numpy as np
 import torch
 from tqdm import tqdm as progress_bar
 
