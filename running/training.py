@@ -55,6 +55,8 @@ def perform_update(config, envs: VecEnv, policy: Policy, agent: PPO, rollouts: R
 
         # Simulate the environment
         env_state, reward, all_done, infos = envs.step(action)
+        # if(len(reward.shape)==2):
+        #     reward = reward[]
         reward = torch.transpose(reward, 1, 2)
 
         # Gather extra return values from all processes

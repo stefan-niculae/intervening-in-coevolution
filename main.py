@@ -37,7 +37,7 @@ def main(config_path: str):
 
         value_loss, action_loss, dist_entropy, episode_number_history = perform_update(
             config, envs, policy, agent, rollouts)
-
+        # print(f'value loss: {value_loss}, action_loss: {action_loss}')
         lr_decay.step(update_number)
 
         if update_number % config.log_interval == 0:

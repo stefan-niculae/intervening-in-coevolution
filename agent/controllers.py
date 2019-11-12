@@ -105,12 +105,12 @@ class ConvController(NNController):
             nn.init.calculate_gain('relu'))
 
         self.main = nn.Sequential(
-            init_(nn.Conv2d(num_inputs, 16, kernel_size=1, stride=1)),
+            init_(nn.Conv2d(num_inputs, 16, kernel_size=2, stride=1)),
             nn.ReLU(),
-            # init_(nn.Conv2d(num_inputs, 16, kernel_size=3, stride=1)),
-            # nn.ReLU(),
+            init_(nn.Conv2d(16, 16, kernel_size=2, stride=1)),
+            nn.ReLU(),
             Flatten(),
-            init_(nn.Linear(576, hidden_size)),
+            init_(nn.Linear(64, hidden_size)),
             nn.ReLU(),
         )
 
@@ -127,6 +127,8 @@ class ConvController(NNController):
         # NaN are for avatars who are not playing anymore
         inputs[torch.isnan(inputs)] = 0
 
+        print(inputs.shape)
+
         x = self.main(inputs)
 
         if self.is_recurrent:
@@ -140,7 +142,6 @@ class ConvController(NNController):
 class FCController(NNController):
     def __init__(self, num_inputs, is_recurrent=False, hidden_size=64):
         super().__init__(is_recurrent, num_inputs, hidden_size)
-
         if is_recurrent:
             num_inputs = hidden_size
 
@@ -150,7 +151,7 @@ class FCController(NNController):
             lambda x: nn.init.
             constant_(x, 0),
             np.sqrt(2))
-
+        num_inputs = 32
         self.actor = nn.Sequential(
             init_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),
             init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
@@ -164,8 +165,12 @@ class FCController(NNController):
         self.train()  # set module in training mode
 
     def forward(self, inputs, rnn_hxs, masks):
+        # print(f'num_inputs: {inputs.shape}')
         x = inputs
-
+        x = x[:, [0, -1]]
+        # print(x)
+        x = x.view(x.shape[0], -1)
+        # print(f'x: {x.shape}')
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
 

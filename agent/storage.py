@@ -66,7 +66,7 @@ class RolloutStorage:
         self.returns[-1] = next_value
         for step in reversed(range(self.num_transitions)):
             self.returns[step] = self.reward[step] + \
-                                 self.done[step + 1] * self.discount * self.returns[step + 1]
+                                 (1-self.done[step]) * self.discount * self.returns[step + 1]
         # if use_gae:
         #     self.value_preds[-1] = next_value
         #     gae = 0

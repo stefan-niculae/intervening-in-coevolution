@@ -14,7 +14,7 @@ class Config:
     ppo_clip = .2
 
     # Only one implemented currently
-    controller = 'conv'
+    controller = 'fc'
 
     """ Hardware """
     # Random seed
@@ -51,7 +51,7 @@ class Config:
 
     """ Optimizer """
     # Learning rate
-    lr = 7e-4
+    lr = 1e-3
 
     # How often to decay the learning rate
     lr_decay_interval = 10
@@ -63,7 +63,7 @@ class Config:
     adam_epsilon = 1e-5
 
     # Max norm o fthe gradients
-    max_grad_norm = .5
+    max_grad_norm = .2
 
     """ Checkpointing """
     # After how many updates to update the progress plot

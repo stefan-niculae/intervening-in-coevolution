@@ -19,7 +19,8 @@ def write_summary(config, envs, rollouts, episode_number, writer, update_number)
                 rows.append(row)
 
     df = pd.DataFrame(rows, columns=['env_id', 'avatar_id', 'episode', 'reward', 'team'])
-    team_rewards = df.groupby(['episode', 'team']).reward.sum().groupby('team').mean()
+    df.to_csv('df.csv', index=False)
+    team_rewards = df.groupby(['env_id', 'episode', 'team']).reward.sum().groupby('team').mean()
 
     TEAM_NAMES = {
         0: 'thieves',
@@ -27,4 +28,5 @@ def write_summary(config, envs, rollouts, episode_number, writer, update_number)
     }
 
     for team_id in set(teams):
+        print('writing', f'reward/{TEAM_NAMES[team_id]}', 'reward:', team_rewards[team_id], 'step number:', update_number)
         writer.add_scalar(f'reward/{TEAM_NAMES[team_id]}', team_rewards[team_id], update_number)
