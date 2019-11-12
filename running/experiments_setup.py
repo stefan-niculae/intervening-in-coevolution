@@ -22,7 +22,7 @@ def paths(config_path):
     config_name = os.path.splitext(config_name)[0]
     time_string = datetime.now().strftime('%d %b %H.%M.%S')  # colons mess paths up, square brackets mess glob up
 
-    experiment_dir = _ROOT_DIR / f'{time_string} | {config_name}'
+    experiment_dir = _ROOT_DIR / f'{time_string} - {config_name}'
     logs_dir    = experiment_dir / _LOG_DIR
     models_dir  = experiment_dir / _TRAINED_MODELS_DIR
     videos_dir  = experiment_dir / _VIDEOS_DIR
@@ -32,7 +32,7 @@ def paths(config_path):
     config_save_path = experiment_dir / 'config.json'
 
     for dir_path in [experiment_dir, logs_dir, videos_dir, models_dir]:
-        os.makedirs(dir_path, exist_ok=True)
+        os.makedirs(str(dir_path), exist_ok=True)
 
     return logs_dir, config_save_path, str(videos_path), str(models_path)
 

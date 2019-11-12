@@ -35,8 +35,7 @@ def main(config_path: str):
         lr_decay.step(update_number)
 
         if update_number % config.log_interval == 0 or is_last_update:
-            write_logs(config, envs, policy, rollouts, episode_number_history, logs_writer, update_number,
-                       value_loss, action_loss, dist_entropy)
+            write_logs(config, envs, policy, rollouts, episode_number_history, logs_writer, update_number)
 
         if update_number % config.eval_interval == 0 or is_last_update:
             video_recorder(policy, update_number)

@@ -32,7 +32,7 @@ def log_scalars(config, envs, rollouts, episode_number, writer, update_number):
                 rows.append(row)
 
     df = pd.DataFrame(rows, columns=['env_id', 'avatar_id', 'episode', 'reward', 'team'])
-    grouped = df.groupby(['episode', 'team']).reward.sum().groupby('team')
+    grouped = df.groupby(['env_id', 'episode', 'team']).reward.sum().groupby('team')
 
     TEAM_NAMES = {
         0: 'thieves',
