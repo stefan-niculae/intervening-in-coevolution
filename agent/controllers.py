@@ -39,17 +39,20 @@ class FCController(nn.Module):
 
         self.actor = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(num_inputs, 4),
-            # nn.Linear(num_inputs, config.hidden_layer_size),
-            # activation(),
-            # nn.Linear(config.hidden_layer_size, config.hidden_layer_size),
-            # activation(),
-            # nn.Linear(config.hidden_layer_size, num_actions),
+            nn.Linear(num_inputs, config.hidden_layer_size),
+            activation(),
+            nn.Linear(config.hidden_layer_size, config.hidden_layer_size),
+            activation(),
+            nn.Linear(config.hidden_layer_size, num_actions),
         )
 
         self.critic = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(num_inputs, 1),
+            nn.Linear(num_inputs, config.hidden_layer_size),
+            activation(),
+            nn.Linear(config.hidden_layer_size, config.hidden_layer_size),
+            activation(),
+            nn.Linear(config.hidden_layer_size, 1),
         )
 
         self.train()  # set module in training mode
