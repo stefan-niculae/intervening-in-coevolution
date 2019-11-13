@@ -1,40 +1,60 @@
 """ Orchestrates I/O and learning """
 
 from sys import argv
+import warnings
+
 import torch
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm as progress_bar
 
-from running.experiments_setup import setup
 from running.training import instantiate, perform_update
+from running.evaluation import evaluate
 from running.visualization import write_logs
-
-LAST_N_REWARDS = 10
+from running.utils import paths, do_this_iteration, save_code
+from environment.visualization import create_animation
+from configs.structure import read_config, save_config
 
 
 def main(config_path: str):
-    config, logs_writer, video_recorder, model_saver = setup(config_path)
+    # Read the experiment configuration
+    config = read_config(config_path)
+
+    # Generate experiment file structure
+    logs_dir, config_save_path, video_path, checkpoint_path, code_save_path = paths(config_path)
+
+    # Read config
+    save_config(config, config_save_path)
+    save_code(code_save_path)
 
     # Set random seed
     torch.manual_seed(config.seed)
 
-    # Instantiate
+    # Instantiate components
     env, policies, storages = instantiate(config)
+    logs_writer = SummaryWriter(logs_dir)
 
-    # Call updates
+    # Main loop
     for update_number in progress_bar(range(config.num_updates)):
-        is_last_update = (update_number == config.num_updates - 1)
-
+        # Collect rollouts and update weights
         perform_update(config, env, policies, storages)
 
-        # if update_number % config.log_interval == 0 or is_last_update:
-        #     write_logs(config, env, policy, rollouts, episode_number_history, logs_writer, update_number)
+        # Write progress summaries
+        if do_this_iteration(config.log_interval, update_number, config.num_updates):
+            write_logs(policies, logs_writer, update_number)
 
-        if update_number % config.eval_interval == 0 or is_last_update:
-            video_recorder(env, policies, update_number)
+        # Evaluate and record video
+        if do_this_iteration(config.eval_interval, update_number, config.num_updates):
+            maps, pos2ids = evaluate(env, policies)
+            create_animation(maps, pos2ids, video_path % update_number)
 
-        if update_number % config.save_interval == 0 or is_last_update:
-            model_saver(policies, update_number)
+        # Checkpoint current model weights
+        if do_this_iteration(config.save_interval, update_number, config.num_updates):
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                torch.save(policies, checkpoint_path)
+            torch.save(policies, checkpoint_path)
 
+    # Flush logs
     logs_writer.close()
 
 

@@ -116,7 +116,7 @@ class PPO(PG):
     """ Proximal Policy Optimization — actor and critic with max bound on update """
     def __init__(self, config: Config, env_state_shape, num_actions):
         super().__init__(config, env_state_shape, num_actions)
-        self.all_parameters += [self.controller.critic.parameters()]
+        self.all_parameters += list(self.controller.critic.parameters())
         self._create_optimizer(config)
         self.clip_param = config.ppo_clip
         self.critic_coef = config.critic_coef

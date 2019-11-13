@@ -69,13 +69,13 @@ class Config:
 
     """ Logging """
     # After how many updates to update the progress plot
-    log_interval: int = 10
+    log_interval: int = 10  # set to 0 for no logging
 
     # After how many updates to save the model
-    save_interval: int = 10
+    save_interval: int = 10  # set to 0 for no saving
 
     # After how many updates to evaluate (run deterministically) and save a video
-    eval_interval: int = 5
+    eval_interval: int = 5  # set to 0 for no evaluation
 
 
 def read_config(config_path: str) -> Config:

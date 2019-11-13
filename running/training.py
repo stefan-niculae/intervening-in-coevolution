@@ -39,7 +39,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     action_log_probs = [0] * env.num_avatars
 
     # Collect rollouts
-    # TODO (?): collect in parallel?
+    # TODO (?): collect in parallel
     for step in range(config.num_transitions):
         if all(dones):
             env_states = env.reset()
