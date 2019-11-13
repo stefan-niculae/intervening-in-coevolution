@@ -1,175 +1,89 @@
 """ Neural network architectures mapping state to action logits """
 
-import numpy as np
 import torch
 import torch.nn as nn
 
-from agent.utils import init, Flatten
+from configs.structure import Config
 
 
-class NNController(nn.Module):
-    def __init__(self, is_recurrent, recurrent_input_size, hidden_size):
+def init(module, weight_init, bias_init, gain=1):
+    # TODO use initialization
+    weight_init(module.weight.data, gain=gain)
+    bias_init(module.bias.data)
+    return module
+
+
+ACTIVATION_FUNCTIONS = {
+    'relu': torch.nn.ReLU,
+    'lrelu': torch.nn.LeakyReLU,
+    'tanh': torch.nn.Tanh
+}
+
+
+# TODO use config.num_hidden_layers
+# TODO use functional api
+# TODO (?) common base from which actor and critic branch
+# TODO (?) recurrent layer at the end
+# TODO (?) TransformerController
+
+class FCController(nn.Module):
+    def __init__(self, config: Config, env_state_shape, num_actions):
         super().__init__()
 
-        self._hidden_size = hidden_size
-        self._recurrent = is_recurrent
+        # Inputs are flattened
+        num_inputs = 1
+        for dim_size in env_state_shape:
+            num_inputs *= dim_size
 
-        if is_recurrent:
-            # TODO give option for lstm as well
-            self.gru = nn.GRU(recurrent_input_size, hidden_size)
-            for name, param in self.gru.named_parameters():
-                if 'bias' in name:
-                    nn.init.constant_(param, 0)
-                elif 'weight' in name:
-                    nn.init.orthogonal_(param)
-
-    @property
-    def is_recurrent(self):
-        return self._recurrent
-
-    @property
-    def recurrent_hidden_state_size(self):
-        if self._recurrent:
-            return self._hidden_size
-        return 1
-
-    @property
-    def output_size(self):
-        return self._hidden_size
-
-    def _forward_gru(self, x, hxs, masks):
-        if x.size(0) == hxs.size(0):
-            x, hxs = self.gru(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
-            x = x.squeeze(0)
-            hxs = hxs.squeeze(0)
-        else:
-            # x is a (T, N, -1) tensor that has been flatten to (T * N, -1)
-            N = hxs.size(0)
-            T = int(x.size(0) / N)
-
-            # unflatten
-            x = x.view(T, N, x.size(1))
-
-            # Same deal with masks
-            masks = masks.view(T, N)
-
-            # Let's figure out which steps in the sequence have a zero for any agent
-            # We will always assume t=0 has a zero in it as that makes the logic cleaner
-            has_zeros = ((masks[1:] == 0.0)
-                         .any(dim=-1)
-                         .nonzero()
-                         .squeeze()
-                         .cpu())
-
-            # +1 to correct the masks[1:]
-            if has_zeros.dim() == 0:
-                # Deal with scalar
-                has_zeros = [has_zeros.item() + 1]
-            else:
-                has_zeros = (has_zeros + 1).numpy().tolist()
-
-            # add t=0 and t=T to the list
-            has_zeros = [0] + has_zeros + [T]
-
-            hxs = hxs.unsqueeze(0)
-            outputs = []
-            for i in range(len(has_zeros) - 1):
-                # We can now process steps that don't have any zeros in masks together!
-                # This is much faster
-                start_idx = has_zeros[i]
-                end_idx = has_zeros[i + 1]
-
-                rnn_scores, hxs = self.gru(
-                    x[start_idx:end_idx],
-                    hxs * masks[start_idx].view(1, -1, 1))
-
-                outputs.append(rnn_scores)
-
-            # assert len(outputs) == T
-            # x is a (T, N, -1) tensor
-            x = torch.cat(outputs, dim=0)
-            # flatten
-            x = x.view(T * N, -1)
-            hxs = hxs.squeeze(0)
-
-        return x, hxs
-
-
-class ConvController(NNController):
-    def __init__(self, num_inputs, is_recurrent=False, hidden_size=16):
-        super().__init__(is_recurrent, hidden_size, hidden_size)
-        init_ = lambda m: init(
-            m,
-            nn.init.orthogonal_,
-            lambda x: nn.init.constant_(x, 0),
-            nn.init.calculate_gain('relu'))
-
-        self.main = nn.Sequential(
-            init_(nn.Conv2d(num_inputs, 16, kernel_size=1, stride=1)),
-            nn.ReLU(),
-            # init_(nn.Conv2d(num_inputs, 16, kernel_size=3, stride=1)),
-            # nn.ReLU(),
-            Flatten(),
-            init_(nn.Linear(256, hidden_size)),
-            nn.ReLU(),
-        )
-
-        init_ = lambda m: init(
-            m,
-            nn.init.orthogonal_,
-            lambda x: nn.init.constant_(x, 0))
-
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
-
-        self.train()  # set module in training mode
-
-    def forward(self, inputs, rnn_hxs, masks):
-        # NaN are for avatars who are not playing anymore
-        inputs[torch.isnan(inputs)] = 0
-
-        x = self.main(inputs)
-
-        if self.is_recurrent:
-            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
-
-        value = self.critic_linear(x)
-
-        return value, x, rnn_hxs
-
-
-class FCController(NNController):
-    def __init__(self, num_inputs, is_recurrent=False, hidden_size=64):
-        super().__init__(is_recurrent, num_inputs, hidden_size)
-
-        if is_recurrent:
-            num_inputs = hidden_size
-
-        init_ = lambda m: init(
-            m,
-            nn.init.orthogonal_,
-            lambda x: nn.init.
-            constant_(x, 0),
-            np.sqrt(2))
+        activation = ACTIVATION_FUNCTIONS[config.activation_function]
 
         self.actor = nn.Sequential(
-            init_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),
-            init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
+            nn.Flatten(),
+            nn.Linear(num_inputs, num_actions),
+            # nn.Linear(num_inputs, config.hidden_layer_size),
+            # activation(),
+            # nn.Linear(config.hidden_layer_size, config.hidden_layer_size),
+            # activation(),
+            # nn.Linear(config.hidden_layer_size, num_actions),
+        )
 
         self.critic = nn.Sequential(
-            init_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),
-            init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
-
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+            nn.Flatten(),
+            nn.Linear(num_inputs, 1),
+        )
 
         self.train()  # set module in training mode
 
-    def forward(self, inputs, rnn_hxs, masks):
-        x = inputs
 
-        if self.is_recurrent:
-            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+class ConvController(nn.Module):
+    def __init__(self, config: Config, env_state_shape, num_actions):
+        super().__init__()
 
-        hidden_critic = self.critic(x)
-        hidden_actor = self.actor(x)
+        activation = ACTIVATION_FUNCTIONS[config.activation_function]
+        num_channels, width, height = env_state_shape
 
-        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
+        self.actor = nn.Sequential(
+            nn.Conv2d(num_channels, config.hidden_layer_size, kernel_size=1, stride=1),
+            activation(),
+            nn.Conv2d(config.hidden_layer_size, config.hidden_layer_size, kernel_size=1, stride=1),
+            activation(),
+            torch.nn.Flatten(),
+            nn.Linear(width * height * config.hidden_layer_size, num_actions),
+        )
+
+        self.critic = nn.Sequential(
+            nn.Conv2d(num_channels, config.hidden_layer_size, kernel_size=1, stride=1),
+            activation(),
+            nn.Conv2d(config.hidden_layer_size, config.hidden_layer_size, kernel_size=1, stride=1),
+            activation(),
+            torch.nn.Flatten(),
+            nn.Linear(config.hidden_layer_size, 1),
+        )
+
+        self.train()  # set module in training mode
+
+
+CONTROLLER_CLASSES = {
+    'fc': FCController,
+    'conv': ConvController,
+}

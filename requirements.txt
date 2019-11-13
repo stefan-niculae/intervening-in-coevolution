@@ -4,7 +4,6 @@ astor==0.8.0
 atari-py==0.2.6
 attrs==19.3.0
 backcall==0.1.0
-#baselines==0.1.6
 bleach==3.1.0
 cachetools==3.1.1
 certifi==2019.9.11
@@ -25,7 +24,6 @@ google-auth==1.7.0
 google-auth-oauthlib==0.4.1
 google-pasta==0.1.8
 grpcio==1.25.0
-gym==0.15.4
 h5py==2.10.0
 idna==2.8
 imageio==2.6.1

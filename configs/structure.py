@@ -4,51 +4,52 @@ from dataclasses import dataclass, asdict
 
 @dataclass
 class Config:
-    # Check scenarios.py for more
+    """ Environment """
+    # Check environment/scenarios.py for more
     scenario: str = '4x4-thief-treasure'
 
     """ Policy """
-    # Only one implemented currently
-    algorithm: str = 'PPO'
+    # Check agent/policies.py
+    algorithm: str = 'pg'  # pg | ppo
 
     # Update clip param
     ppo_clip: float = .2
-
-    # Only one implemented currently
-    controller: str = 'conv'
-
-    """ Hardware """
-    # Random seed
-    seed: int = 0
-
-    # CPU processes
-    num_processes: int = 4
-
-    # True not tested
-    cuda: bool = False
-
-    """ Running """
-    # Number of model updates
-    num_updates: int = 100
-
-    # Gather this many transitions before running a model update
-    num_transitions: int = 1000
-
-    # Sample this many times per model update (ppo_epoch)
-    num_batches: int = 5
-
-    # Sample this many per batch
-    batch_size: int = 256
-
-    """ Steering """
-    # Discount future rewards (gamma)
-    discount: float = .99
 
     # Critic
     critic_coef: float = .5
 
     # Encourage "exploration"
     entropy_coef: float = .01
+
+    """ Controller """
+    # Controller architecture — check agent/controllers.py
+    controller: str = 'conv'  # fc | conv
+
+    num_hidden_layers: int = 2
+
+    hidden_layer_size: int = 32
+
+    activation_function: str = 'relu'  # lrelu | relu | tanh
+
+    """ Running """
+    # Random seed
+    seed: int = 0
+
+    # Number of model updates
+    num_updates: int = 100
+
+    # Gather this many transitions before running a model update
+    num_transitions: int = 1000
+
+    # In how many batches to split the transitions
+    num_batches: int = 5
+
+    # How many times to iterate over all transitions
+    num_epochs: int = 5
+
+    """ Steering """
+    # Discount future rewards (gamma)
+    discount: float = .99
 
     """ Optimizer """
     # Learning rate
@@ -63,10 +64,10 @@ class Config:
     # Adam optimizer parameter
     adam_epsilon: float = 1e-5
 
-    # Max norm o fthe gradients
+    # Max norm of the gradients
     max_grad_norm: float = .5
 
-    """ Checkpointing """
+    """ Logging """
     # After how many updates to update the progress plot
     log_interval: int = 10
 

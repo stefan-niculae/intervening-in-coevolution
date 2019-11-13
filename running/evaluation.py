@@ -1,41 +1,39 @@
+from typing import List
 from copy import copy
-import torch
 
-from environment.ThievesGuardiansEnv import ThievesGuardiansEnv
+from environment.thieves_guardians_env import TGEnv
+from agent.policies import Policy
 
 
-def evaluate(config, policy):
-    env = ThievesGuardiansEnv(
-        config.scenario,
-        env_id=0
-    )
-    env.seed(0)
+def evaluate(env: TGEnv, team_policies: List[Policy]):
+    maps    = []
+    pos2ids = []
 
-    # Initialize environment
-    observation = env.reset()
+    env_states = env.reset()
+    dones = [False] * env.num_avatars
 
-    maps = [env._map.copy()]
-    pos2ids = [copy(env._pos2id)]
+    actions = [0] * env.num_avatars
+    action_log_probs = [0] * env.num_avatars
 
-    while True:
-        controller_ids = env._controller
-        env_state = torch.tensor(observation, dtype=torch.float32)
-        rec_state = torch.zeros(env.num_avatars, policy.recurrent_hidden_state_size)
-        individual_done = torch.tensor([env._avatar_alive]).transpose(0, 1)
-        _, action, _, _ = policy.pick_action(
-            controller_ids,
-            env_state,
-            rec_state,
-            individual_done,
-            # TODO force deterministic
-        )
-        action = action.numpy().flatten()
-        observation, _, all_done, _ = env.step(action)
-
+    while not all(dones):
         maps.append(env._map.copy())
         pos2ids.append(copy(env._pos2id))
 
-        if all_done:
-            break
+        # Alive at the beginning of step
+        avatar_alive = env.avatar_alive.copy()
+
+        # Run each alive avatar individually
+        for avatar_id in range(env.num_avatars):
+            if avatar_alive[avatar_id]:
+                # Chose action based on the policy
+                team = env.id2team[avatar_id]
+                policy = team_policies[team]
+                actions[avatar_id], action_log_probs[avatar_id] = policy.pick_action(env_states[avatar_id])
+
+        # Step the environment with one action for each avatar
+        env_states, rewards, dones, infos = env.step(actions)
+
+    maps.append(env._map.copy())
+    pos2ids.append(copy(env._pos2id))
 
     return maps, pos2ids

@@ -4,7 +4,7 @@ from matplotlib.animation import FuncAnimation
 import matplotlib.colors
 from matplotlib.patches import Patch
 
-from environment.ThievesGuardiansEnv import (
+from environment.thieves_guardians_env import (
     EMPTY as E,
     WALL as W,
     THIEF as T,
@@ -13,7 +13,7 @@ from environment.ThievesGuardiansEnv import (
 )
 
 
-CELL_TYPES = [E, W, T, G, S]  # must increment from zero
+CELL_TYPES = [T, G, E, W, S]  # must increment from zero
 TYPE_COLORS = {
     E: 'lightgrey',
     W: 'dimgrey',

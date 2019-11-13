@@ -1,127 +1,184 @@
+""" Maps env state to action and provides rules on how to update inner controller """
 
 import torch
 import torch.nn as nn
-from gym.spaces import Box, Discrete, MultiBinary
+from torch.distributions.categorical import Categorical
 
-from agent.distributions import Bernoulli, Categorical, DiagGaussian
-from agent.controllers import FCController, ConvController
+from configs.structure import Config
+from agent.controllers import CONTROLLER_CLASSES
 
 
-class Policy(nn.Module):
-    def __init__(self, obs_shape, action_space, num_controllers: int, controller_kind, controller_kwargs=None):
-        super().__init__()
+class Policy:
+    def __init__(self, config: Config, env_state_shape, num_actions):
+        controller_class = CONTROLLER_CLASSES[config.controller]
+        self.controller = controller_class(config, env_state_shape, num_actions)
+        self.entropy_coef = config.entropy_coef
+        self.max_grad_norm = config.max_grad_norm
+        self.all_parameters = []
 
-        if controller_kind == 'fc':
-            controller_class = FCController
-        if controller_kind == 'conv':
-            controller_class = ConvController
+    def _create_optimizer(self, config: Config):
+        self.optimizer = torch.optim.Adam(self.all_parameters, lr=config.lr)
+        self.lr_decay = torch.optim.lr_scheduler.StepLR(self.optimizer, config.lr_decay_interval, config.lr_decay_factor)
 
-        if controller_kwargs is None:
-            controller_kwargs = {}
-        # Create identical controllers
-        self.controllers = [controller_class(obs_shape[0], **controller_kwargs) for _ in range(num_controllers)]
-
-        if isinstance(action_space, Discrete):
-            num_outputs = action_space.n
-            dist_class = Categorical
-        elif isinstance(action_space, Box):
-            num_outputs = action_space.shape[0]
-            dist_class = DiagGaussian
-        elif isinstance(action_space, MultiBinary):
-            num_outputs = action_space.shape[0]
-            dist_class = Bernoulli
-        else:
-            raise NotImplementedError
-
-        self.dist = dist_class(self.controllers[0].output_size, num_outputs)
-
-    @property
-    def is_recurrent(self):
-        return self.controllers[0].is_recurrent
-
-    @property
-    def recurrent_hidden_state_size(self):
-        """ Size of rnn_hx. """
-        return self.controllers[0].recurrent_hidden_state_size
-
-    def forward(self, env_state, rec_state, done):
-        raise NotImplementedError
-
-    def _run_controllers(self, controller_ids, env_state, rec_state_input, done):
+    def pick_action(self, env_state, deterministic=False):
         """
-        Distribute the load to each controller and then merge them back
+        In the given env_state, pick action either by sampling or most probable one (when deterministic=True)
 
-        :param controller_ids: numpy array of shape [batch_size,]
-        :param env_state:  tensor of shape [batch_size, C, W, H]
-        :param rec_state_input: tensor of shape [batch_size, env.rec_state_size]
-        :param done: tensor of shape [batch_size, 1]
+        Args:
+            env_state: float array of shape env_state_shape
+            deterministic: whether to pick most probable action
 
-        `batch_size` can also be two dimensional and will be flattened (just the first two dims)
-
+        Returns:
+            action: int
+            action_log_prob: float
         """
-        first_two_dims = None
-        batch_size = env_state.size(0)
-        if len(env_state.shape) == 5:
-            first_two_dims = env_state.shape[:2]
-            batch_size       = env_state.size(0) * env_state.size(1)
-            # [num_processes, num_avatars, C, W, H] to [num_processes * num_avatars, C, W, H]
-            env_state        = env_state      .view(-1, *env_state.shape[2:])
-            rec_state_input  = rec_state_input.view(-1, *rec_state_input.shape[2:])
-            done             = done           .view(-1, *done.shape[2:])
-            controller_ids   = controller_ids.flatten()
+        env_state = torch.tensor(env_state, dtype=torch.float32)
+        env_state = env_state.unsqueeze_(0)  # set a batch size of 1
 
-        value            = torch.zeros(batch_size, 1)
-        actor_features   = torch.zeros(batch_size, self.controllers[0].output_size)
-        rec_state_output = torch.zeros(batch_size, 1)
-        for id, controller in enumerate(self.controllers):
-            controller_mask = (controller_ids == id)
-            if sum(controller_mask) == 0:
-                continue
+        actor_logits = self.controller.actor(env_state)  # float tensor of shape [1, num_actions]
+        action_distributions = Categorical(logits=actor_logits)  # float tensor of shape [1, num_actions]
 
-            # Act just on the samples meant for this input
-            controller_value, \
-            controller_actor_features, \
-            controller_rec_state \
-                = controller(env_state      [controller_mask],
-                             rec_state_input[controller_mask],
-                             done           [controller_mask])
+        try:
+            if deterministic:  # pick most probable
+                action = action_distributions.probs.argmax()
+            else:
+                action = action_distributions.sample()
+        except RuntimeError:
+            print('err')
 
-            # Place the results in the spots for them
-            value           [controller_mask] = controller_value
-            actor_features  [controller_mask] = controller_actor_features
-            rec_state_output[controller_mask] = controller_rec_state
+        action_log_probs = action_distributions.log_prob(action)
+        return action.item(), action_log_probs.item()
 
-        # Re-form the two dimensional batch shape
-        if first_two_dims:
-            value            = value           .view(*first_two_dims, *value.shape[1:])
-            actor_features   = actor_features  .view(*first_two_dims, *actor_features.shape[1:])
-            rec_state_output = rec_state_output.view(*first_two_dims, *rec_state_output.shape[1:])
+    def _evaluate_actions(self, env_states, actions):
+        """
+        See how likely these actions (using the current model) in the given env_states
 
-        return value, actor_features, rec_state_output
+        Args:
+            env_states: float tensor of shape [batch_size, *env_state_shape]
+            actions:    int tensor of shape  [batch_size,]
 
-    def pick_action(self, controller_ids, env_state, rec_state, done, deterministic=False):
-        value, actor_features, rec_state = self._run_controllers(controller_ids, env_state, rec_state, done)
-        dist = self.dist(actor_features)
+        Returns:
+            action_log_probs: float tensor of shape [batch_size,]
+            entropy:          float tensor of shape [batch_size,]
+        """
+        actor_logits = self.controller.actor(env_states)  # float tensor of shape [batch_size, num_actions]
+        action_distributions = Categorical(logits=actor_logits)  # float tensor of shape [batch_size, num_actions]
 
-        if deterministic:
-            action = dist.mode()
-        else:
-            action = dist.sample()
+        action_log_probs = action_distributions.log_prob(actions)  # float tensor of shape [batch_size,]
+        entropy = action_distributions.entropy()  # float tensor of shape [batch_size,]
 
-        action_log_probs = dist.log_probs(action)
+        return action_log_probs, entropy
 
-        return value, action, action_log_probs, rec_state
+    def update(self, env_states, actions, old_action_log_probs, returns):
+        """
+        Args:
+            env_states:           float tensor of shape [batch_size, *env_state_shape]
+            actions:              int tensor of shape  [batch_size,]
+            old_action_log_probs: float tensor of shape [batch_size,]
+            returns:              float tensor of shape [batch_size,]
+        """
+        raise NotImplemented
 
-    def get_value(self, controller_ids, env_state, rec_state, done):
-        value, _, _ = self._run_controllers(controller_ids, env_state, rec_state, done)
-        return value
 
-    def evaluate_actions(self, controller_ids, env_state, rec_state, done, action):
-        value, actor_features, rec_state = self._run_controllers(controller_ids, env_state, rec_state, done)
-        dist = self.dist(actor_features)
+class PG(Policy):
+    """ Policy Gradient - single actor """
+    def __init__(self, config: Config, env_state_shape, num_actions):
+        super().__init__(config, env_state_shape, num_actions)
+        self.all_parameters += list(self.controller.actor.parameters())
+        self._create_optimizer(config)
 
-        action_log_probs = dist.log_probs(action)
-        dist_entropy = dist.entropy().mean()
+    def update(self, env_states, actions, old_action_log_probs, returns):
+        """
+        Increase the probability of actions that give high returns
 
-        return value, action_log_probs, dist_entropy, rec_state
+        Args:
+            env_states:           float tensor of shape [batch_size, *env_state_shape]
+            actions:              int tensor of shape  [batch_size,]
+            old_action_log_probs: float tensor of shape [batch_size,]
+            returns:              float tensor of shape [batch_size,]
+        """
+        action_log_probs, entropy = self._evaluate_actions(env_states, actions)
+
+        policy_loss = -(action_log_probs * returns).mean()
+        entropy_loss = -entropy.mean()
+        loss = policy_loss + self.entropy_coef * entropy_loss
+        self._optimize(loss)
+
+    def _optimize(self, loss):
+        self.optimizer.zero_grad()
+        loss.backward(retain_graph=False)
+        nn.utils.clip_grad_norm_(self.all_parameters, self.max_grad_norm)
+        self.optimizer.step()
+        self.lr_decay.step(None)
+
+
+class PPO(PG):
+    """ Proximal Policy Optimization — actor and critic with max bound on update """
+    def __init__(self, config: Config, env_state_shape, num_actions):
+        super().__init__(config, env_state_shape, num_actions)
+        self.all_parameters += [self.controller.critic.parameters()]
+        self._create_optimizer(config)
+        self.clip_param = config.ppo_clip
+        self.critic_coef = config.critic_coef
+
+    def update(self, env_states, actions, old_action_log_probs, returns):
+        """
+        Increase the probability of actions that give high advantages
+        and move predicted values towards observed returns
+
+        Args:
+            env_states:           float tensor of shape [batch_size, *env_state_shape]
+            actions:              int tensor of shape  [batch_size,]
+            old_action_log_probs: float tensor of shape [batch_size,]
+            returns:              float tensor of shape [batch_size,]
+        """
+        action_log_probs, entropy = self._evaluate_actions(env_states, actions)
+
+        values = self.controller.critic(env_states)
+        advantage = returns - values.detach()
+
+        ratio = torch.exp(action_log_probs - old_action_log_probs.detach())
+        surr1 = ratio * advantage
+        surr2 = torch.clamp(ratio, 1 - self.clip_param, 1 + self.clip_param) * advantage
+
+        actor_loss = -torch.min(surr1, surr2).mean()
+        entropy_loss = -entropy.mean()
+        critic_loss = ((returns - values) ** 2).mean()
+
+        loss = (actor_loss +
+                self.critic_coef * critic_loss +
+                self.entropy_coef * entropy_loss)
+
+        self._optimize(loss)
+        # TODO log these losses
+
+
+POLICY_CLASSES = {
+    'pg': PG,
+    'ppo': PPO,
+}
+
+
+# TODO (?) PPO advantage target
+# TODO (?) PPO clipped value loss
+# def old_update():
+#     advantages = returns[:-1] - value_pred[:-1]
+#     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
+#
+#     for samples in batches:
+#         env_state, action, value_pred, return_batch, done, old_action_prob, adv_targ = sample
+#
+#         values, action_log_prob, dist_entropy, _ = self.policy.evaluate_actions(env_state, done, action)
+#
+#         ratio = torch.exp(action_log_prob - old_action_prob)
+#         surr1 = ratio * adv_targ
+#         surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * adv_targ
+#         action_loss = -torch.min(surr1, surr2).mean()
+#
+#         if use_clipped_value_loss:
+#             value_pred_clipped = value_pred + \
+#                                  (values - value_pred).clamp(-self.clip_param, self.clip_param)
+#             value_losses = (values - return_batch).pow(2)
+#             value_losses_clipped = (value_pred_clipped - return_batch).pow(2)
+#             value_loss = 0.5 * torch.max(value_losses, value_losses_clipped).mean()
 

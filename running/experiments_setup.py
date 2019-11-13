@@ -1,5 +1,6 @@
 import os
 import os.path
+import warnings
 from datetime import datetime
 from pathlib import Path
 
@@ -38,8 +39,10 @@ def paths(config_path):
     return logs_dir, config_save_path, str(videos_path), str(models_path)
 
 
-def save_model(dict_to_save, save_path):
-    torch.save(dict_to_save, save_path)
+def save_model(policies, save_path):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        torch.save(policies, save_path)
 
 
 def load_model(checkpoint_path):
@@ -56,10 +59,10 @@ def setup(config_path):
     logs_writer = SummaryWriter(logs_dir)
     save_config(config, config_save_path)
 
-    def record_rollout_f(policy, update_step):
-        maps, pos2ids = evaluate(config, policy)
+    def record_rollout_f(env, policies, update_step):
+        maps, pos2ids = evaluate(env, policies)
         create_animation(maps, pos2ids, videos_path % update_step)
-    save_model_f = lambda policy, step: save_model(policy, models_path % step)
+    save_model_f = lambda policies, step: save_model(policies, models_path % step)
 
     return config, logs_writer, record_rollout_f, save_model_f
 
