@@ -36,9 +36,11 @@ DPI = 80
 
 
 def plot_instance(args: tuple):
-    ax, cmap, norm, step, map, pos2id, reward = args
+    ax, cmap, norm, step, map, pos2id, reward, action = args
 
-    ax.set_title(f'Step {step}\nCumulative rewards: {reward}')
+    ax.set_title(f'Step {step}\n'
+                 f'Cumulative rewards: {reward}\n'
+                 f'Action: {action}')
 
     # Each cells shows the id of the avatar that is there
     display_map = np.full(map.shape, fill_value='')
@@ -69,7 +71,7 @@ def plot_instance(args: tuple):
 
 
 def create_animation(history: tuple, save_path: str):
-    maps, pos2ids, rewards = history
+    maps, pos2ids, rewards, actions = history
 
     fig, ax = plt.subplots()
     fig.set_tight_layout(True)
@@ -114,7 +116,7 @@ def create_animation(history: tuple, save_path: str):
     norm = matplotlib.colors.BoundaryNorm([*bounds, max(CELL_TYPES) + .5], len(CELL_TYPES))
 
     # Create the animation
-    args = [(ax, cmap, norm, i, maps[i], pos2ids[i], rewards[i]) for i in range(len(maps))]
+    args = [(ax, cmap, norm, i, maps[i], pos2ids[i], rewards[i], actions[i]) for i in range(len(maps))]
     animation = FuncAnimation(fig, plot_instance, args)
 
     # Save the gif

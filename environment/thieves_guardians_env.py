@@ -15,6 +15,13 @@ LEFT  = 2
 RIGHT = 3
 # NOOP  = 4
 
+ACTION_IDX2SYMBOL = {
+    UP: '^',
+    DOWN: 'v',
+    LEFT: '<',
+    RIGHT: '>'
+}
+
 action_idx2delta = {
     UP:    np.array([-1,  0]),
     DOWN:  np.array([+1,  0]),
