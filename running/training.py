@@ -29,25 +29,30 @@ def instantiate(config: Config) -> (TGEnv, List[Policy], List[RolloutStorage]):
     return env, team_policies, avatar_storages
 
 
+class EpisodeAccumulator:
+    def __init__(self, size):
+        self.history = []
+        self.current = np.zeros(size)
+
+    def episode_over(self):
+        self.history.append(self.current.copy())
+        self.current[:] = 0
+
+
 def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_storages: List[RolloutStorage]):
     """ Collects rollouts and updates """
-
-    # Always start with a fresh env
-    env_states = env.reset()
-    dones = [False] * env.num_avatars
-
     actions          = [0] * env.num_avatars
     action_log_probs = [0] * env.num_avatars
 
-    episode_rewards = np.zeros(env.num_avatars)
+    total_rewards = EpisodeAccumulator(env.num_avatars)
+    steps_alive   = EpisodeAccumulator(env.num_avatars)
+
+    # Always start with a fresh env
+    env_states = env.reset()
 
     # Collect rollouts
     # TODO (?): collect in parallel
     for step in range(config.num_transitions):
-        if all(dones):
-            env_states = env.reset()
-            print('total rewards (per avatar) this episode', episode_rewards)
-
         # Alive at the beginning of step
         avatar_alive = env.avatar_alive.copy()
 
@@ -57,12 +62,12 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                 # Chose action based on the policy
                 team = env.id2team[avatar_id]
                 policy = team_policies[team]
+                # TODO log losses
                 actions[avatar_id], action_log_probs[avatar_id] = policy.pick_action(env_states[avatar_id])
 
         # Step the environment with one action for each avatar
         env_states, rewards, dones, infos = env.step(actions)
-
-        episode_rewards += rewards
+        # TODO log infos
 
         # Insert transitions for alive avatars
         for avatar_id in range(env.num_avatars):
@@ -75,6 +80,15 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                     rewards[avatar_id],
                     dones[avatar_id],
                 )
+
+        total_rewards.current += rewards
+        steps_alive.current   += avatar_alive
+
+        # Episode is done
+        if all(dones):
+            env_states = env.reset()
+            total_rewards.episode_over()
+            steps_alive  .episode_over()
 
     # Compute returns for all storages
     for storage in avatar_storages:
@@ -93,3 +107,6 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     # Prepare storages for the next update
     for storage in avatar_storages:
         storage.reset()
+
+    # Ignore last episode since it's most likely unfinished
+    return total_rewards.history[:-1], steps_alive.history[:-1]

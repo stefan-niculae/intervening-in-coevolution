@@ -1,3 +1,5 @@
+import numpy as np
+
 from typing import List
 from torch.utils.tensorboard import SummaryWriter
 
@@ -9,11 +11,6 @@ TEAM_NAMES = [
 ]
 
 
-def write_logs(team_policies: List[Policy], writer: SummaryWriter, update_number: int):
-    log_layers(team_policies, writer, update_number)
-    # log_scalars(config, envs, rollouts, episode_number, writer, update_number)
-
-
 def log_layers(team_policies: List[Policy], writer: SummaryWriter, update_number: int):
     """ Adds histograms of all parameters and their gradients """
     for team_name, policy in zip(TEAM_NAMES, team_policies):
@@ -23,39 +20,28 @@ def log_layers(team_policies: List[Policy], writer: SummaryWriter, update_number
                 writer.add_histogram(f'grads/policy/{layer_name}', layer_params.grad, update_number)
 
 
-# def log_scalars(config, envs, rollouts, episode_number, writer, update_number):
-#     rewards = rollouts.reward.numpy()
-#     teams = rollouts.controller[0, 0]  # assumes all envs have the same team orders
-#
-#     rows = []
-#     for step in range(config.num_transitions - 1):
-#         for env_id in range(envs.num_envs):
-#             for avatar_id in range(envs.num_avatars):
-#                 row = (
-#                     env_id,
-#                     avatar_id,
-#                     episode_number[step, env_id],
-#                     rewards[step, env_id, avatar_id, 0],
-#                     teams[avatar_id],
-#                 )
-#                 rows.append(row)
-#
-#     df = pd.DataFrame(rows, columns=['env_id', 'avatar_id', 'episode', 'reward', 'team'])
-#     grouped = df.groupby(['env_id', 'episode', 'team']).reward.sum().groupby('team')
-#
-#     TEAM_NAMES = {
-#         0: 'thieves',
-#         1: 'guardians',
-#     }
-#
-#     avg = grouped.mean()
-#     std = grouped.std()
-#     min = grouped.min()
-#     max = grouped.max()
-#     for team_id in set(teams):
-#         writer.add_scalar(f'reward/avg/{TEAM_NAMES[team_id]}', avg[team_id], update_number)
-#         writer.add_scalar(f'reward/std/{TEAM_NAMES[team_id]}', std[team_id], update_number)
-#         writer.add_scalar(f'reward/min/{TEAM_NAMES[team_id]}', min[team_id], update_number)
-#         writer.add_scalar(f'reward/max/{TEAM_NAMES[team_id]}', max[team_id], update_number)
+def log_descriptive_statistics(array: np.array, prefix: str, writer, update_number: int,  axis=0):
+    """ Min, max, std avg """
+    for op in ['min', 'max', 'mean', 'std']:
+        writer.add_scalar(
+            prefix + (op if op != 'mean' else 'avg'),
+            getattr(array, op)(axis=axis),
+            update_number
+        )
 
+
+def log_scalars(total_reward: np.array, steps_alive: np.array, writer: SummaryWriter, update_number: int):
+    """
+    Args:
+        total_reward: float array-like of shape [num_episodes, num_avatars]
+        steps_alive: int array-like of shape [num_episodes, num_avatars]
+    """
+    total_reward = np.asarray(total_reward)
+    steps_alive  = np.asarray(steps_alive)
+
+    num_avatars = total_reward.shape[1]
+
+    for name, array in [('total-episode-reward', total_reward), ('episode-steps-alive', steps_alive)]:
+        for avatar_id in range(num_avatars):
+            log_descriptive_statistics(array[:, avatar_id], f'{name}/avatar-{avatar_id}/', writer, update_number)
 

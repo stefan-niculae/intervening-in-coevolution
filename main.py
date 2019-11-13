@@ -9,7 +9,7 @@ from tqdm import tqdm as progress_bar
 
 from running.training import instantiate, perform_update
 from running.evaluation import evaluate
-from running.visualization import write_logs
+from running.visualization import log_layers, log_scalars
 from running.utils import paths, do_this_iteration, save_code
 from environment.visualization import create_animation
 from configs.structure import read_config, save_config
@@ -36,11 +36,12 @@ def main(config_path: str):
     # Main loop
     for update_number in progress_bar(range(config.num_updates)):
         # Collect rollouts and update weights
-        perform_update(config, env, policies, storages)
+        total_rewards, steps_alive = perform_update(config, env, policies, storages)
 
         # Write progress summaries
         if do_this_iteration(config.log_interval, update_number, config.num_updates):
-            write_logs(policies, logs_writer, update_number)
+            log_layers(policies, logs_writer, update_number)
+            log_scalars(total_rewards, steps_alive, logs_writer, update_number)
 
         # Evaluate and record video
         if do_this_iteration(config.eval_interval, update_number, config.num_updates):
