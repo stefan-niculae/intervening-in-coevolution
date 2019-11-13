@@ -56,3 +56,4 @@ def log_scalars(training_history: (np.array, np.array, [dict]), writer: SummaryW
 
         for loss_name, values in transposed.items():
             log_descriptive_statistics(values, f'loss/{TEAM_NAMES[team]}/{loss_name}/', writer, update_number)
+            writer.add_histogram(f'loss/{TEAM_NAMES[team]}/{loss_name}', values, update_number)
