@@ -34,7 +34,7 @@ def evaluate(env: TGEnv, team_policies: List[Policy]):
                 # Chose action based on the policy
                 team = env.id2team[avatar_id]
                 policy = team_policies[team]
-                actions[avatar_id], action_log_probs[avatar_id] = policy.pick_action(env_states[avatar_id], deterministic=False)
+                actions[avatar_id], action_log_probs[avatar_id] = policy.pick_action(env_states[avatar_id], deterministic=True)
 
         # Step the environment with one action for each avatar
         env_states, rewards, dones, infos = env.step(actions)

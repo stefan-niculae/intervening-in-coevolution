@@ -38,13 +38,10 @@ class Policy:
         actor_logits = self.controller.actor(env_state)  # float tensor of shape [1, num_actions]
         action_distributions = Categorical(logits=actor_logits)  # float tensor of shape [1, num_actions]
 
-        try:
-            if deterministic:  # pick most probable
-                action = action_distributions.probs.argmax()
-            else:
-                action = action_distributions.sample()
-        except RuntimeError:
-            print('err')
+        if deterministic:  # pick most probable
+            action = action_distributions.probs.argmax()
+        else:
+            action = action_distributions.sample()
 
         action_log_probs = action_distributions.log_prob(action)
         return action.item(), action_log_probs.item()
@@ -68,6 +65,13 @@ class Policy:
         entropy = action_distributions.entropy()  # float tensor of shape [batch_size,]
 
         return action_log_probs, entropy
+
+    def _optimize(self, loss):
+        self.optimizer.zero_grad()
+        loss.backward(retain_graph=False)
+        nn.utils.clip_grad_norm_(self.all_parameters, self.max_grad_norm)
+        self.optimizer.step()
+        self.lr_decay.step(None)
 
     def update(self, env_states, actions, old_action_log_probs, returns):
         """
@@ -101,7 +105,9 @@ class PG(Policy):
             {name : loss}
         """
         action_log_probs, entropy = self._evaluate_actions(env_states, actions)
+        # print('min action log probs', action_log_probs.min())
 
+        # print('sum action log probs', sum(action_log_probs))
         policy_loss = -(action_log_probs * returns).mean()
         entropy_loss = -entropy.mean()
         loss = policy_loss + self.entropy_coef * entropy_loss
@@ -111,13 +117,6 @@ class PG(Policy):
             'actor': policy_loss.item(),
             'entropy': entropy_loss.item(),
         }
-
-    def _optimize(self, loss):
-        self.optimizer.zero_grad()
-        loss.backward(retain_graph=False)
-        nn.utils.clip_grad_norm_(self.all_parameters, self.max_grad_norm)
-        self.optimizer.step()
-        self.lr_decay.step(None)
 
 
 class PPO(PG):

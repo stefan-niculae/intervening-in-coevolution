@@ -34,8 +34,9 @@ action_idx2delta = {
 # (thief reward, guardian reward)
 REWARDS = {
     'killed':      (-1, +1),
-    'out_of_time': (-5, +5),
-    'treasure':    (+9,  0),  # TODO: should guardians get a negative reward here?
+    'out_of_time': (0, +5),
+    'time':        (0, 0),
+    'treasure':    (+1,  0),  # TODO: should guardians get a negative reward here?
 }
 
 
@@ -66,7 +67,8 @@ class TGEnv:
         self.num_avatars = scenario.n_thieves + scenario.n_guardians
         self.num_teams = int(scenario.n_thieves != 0) + int(scenario.n_guardians != 0)
 
-        self.state_shape = (5, self._width, self._height)
+        # self.state_shape = (5, self._width, self._height)
+        self.state_shape = (1, self._width, self._height)
         self.num_actions = len(action_idx2delta)
 
         self._n_thieves = scenario.n_thieves
@@ -150,6 +152,12 @@ class TGEnv:
         for avatar_id in range(self.num_avatars):
             if not self.avatar_alive[avatar_id]:
                 continue
+            team = self.id2team[avatar_id]
+            reward[avatar_id] += REWARDS['time'][team]
+
+        for avatar_id in range(self.num_avatars):
+            if not self.avatar_alive[avatar_id]:
+                continue
 
             action_idx = actions[avatar_id]
             delta = action_idx2delta[action_idx]
@@ -185,6 +193,7 @@ class TGEnv:
                 info['end_reason'] = f'A thief (id={avatar_id}) reached the treasure'
 
                 thief_reward, guardian_reward = REWARDS['treasure']
+                thief_reward *= 5 / self.elapsed_time  # TODO debug/generalize
                 reward[avatar_id] += thief_reward
 
                 # Punish all guardians
@@ -280,7 +289,8 @@ class TGEnv:
                 opponents[pos] = 1
 
         # Channels first
-        return np.stack([own, teammates, opponents, self._walls_channel, self._treasure_channel])
+        # return np.stack([own, teammates, opponents, self._walls_channel, self._treasure_channel])
+        return np.stack([own])
 
     def __str__(self):
         CELL_TYPE2LETTER = {
