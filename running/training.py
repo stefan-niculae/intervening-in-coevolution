@@ -62,7 +62,6 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                 # Chose action based on the policy
                 team = env.id2team[avatar_id]
                 policy = team_policies[team]
-                # TODO log losses
                 actions[avatar_id], action_log_probs[avatar_id] = policy.pick_action(env_states[avatar_id])
 
         # Step the environment with one action for each avatar
@@ -95,6 +94,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
         storage.compute_returns()
 
     # Update policies
+    losses_history = [[] for _ in range(env.num_teams)]
     for epoch in range(config.num_epochs):
         for avatar_id in range(env.num_avatars):
             team = env.id2team[avatar_id]
@@ -102,11 +102,12 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
             storage = avatar_storages[avatar_id]
 
             for batch in storage.sample_batches():
-                policy.update(*batch)
+                losses = policy.update(*batch)
+                losses_history[team].append(losses)
 
     # Prepare storages for the next update
     for storage in avatar_storages:
         storage.reset()
 
     # Ignore last episode since it's most likely unfinished
-    return total_rewards.history[:-1], steps_alive.history[:-1]
+    return total_rewards.history[:-1], steps_alive.history[:-1], losses_history

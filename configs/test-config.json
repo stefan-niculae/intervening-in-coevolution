@@ -4,8 +4,8 @@
   "algorithm": "ppo",
   "controller": "fc",
 
-  "num_updates": 5,
-  "num_transitions": 50,
+  "num_updates": 10,
+  "num_transitions": 100,
   "num_batches": 3,
   "num_epochs": 2,
 

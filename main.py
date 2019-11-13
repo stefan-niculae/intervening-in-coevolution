@@ -36,17 +36,17 @@ def main(config_path: str):
     # Main loop
     for update_number in progress_bar(range(config.num_updates)):
         # Collect rollouts and update weights
-        total_rewards, steps_alive = perform_update(config, env, policies, storages)
+        training_history = perform_update(config, env, policies, storages)
 
         # Write progress summaries
         if do_this_iteration(config.log_interval, update_number, config.num_updates):
             log_layers(policies, logs_writer, update_number)
-            log_scalars(total_rewards, steps_alive, logs_writer, update_number)
+            log_scalars(training_history, logs_writer, update_number)
 
         # Evaluate and record video
         if do_this_iteration(config.eval_interval, update_number, config.num_updates):
-            history = evaluate(env, policies)
-            create_animation(history, video_path % update_number)
+            env_history = evaluate(env, policies)
+            create_animation(env_history, video_path % update_number)
 
         # Checkpoint current model weights
         if do_this_iteration(config.save_interval, update_number, config.num_updates):

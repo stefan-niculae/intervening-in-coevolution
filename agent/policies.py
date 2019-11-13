@@ -87,7 +87,7 @@ class PG(Policy):
         self.all_parameters += list(self.controller.actor.parameters())
         self._create_optimizer(config)
 
-    def update(self, env_states, actions, old_action_log_probs, returns):
+    def update(self, env_states, actions, old_action_log_probs, returns) -> {str: float}:
         """
         Increase the probability of actions that give high returns
 
@@ -96,13 +96,21 @@ class PG(Policy):
             actions:              int tensor of shape  [batch_size,]
             old_action_log_probs: float tensor of shape [batch_size,]
             returns:              float tensor of shape [batch_size,]
+
+        Returns:
+            {name : loss}
         """
         action_log_probs, entropy = self._evaluate_actions(env_states, actions)
 
         policy_loss = -(action_log_probs * returns).mean()
         entropy_loss = -entropy.mean()
         loss = policy_loss + self.entropy_coef * entropy_loss
+
         self._optimize(loss)
+        return {
+            'actor': policy_loss.item(),
+            'entropy': entropy_loss.item(),
+        }
 
     def _optimize(self, loss):
         self.optimizer.zero_grad()
@@ -121,7 +129,7 @@ class PPO(PG):
         self.clip_param = config.ppo_clip
         self.critic_coef = config.critic_coef
 
-    def update(self, env_states, actions, old_action_log_probs, returns):
+    def update(self, env_states, actions, old_action_log_probs, returns) -> {str: float}:
         """
         Increase the probability of actions that give high advantages
         and move predicted values towards observed returns
@@ -131,6 +139,9 @@ class PPO(PG):
             actions:              int tensor of shape  [batch_size,]
             old_action_log_probs: float tensor of shape [batch_size,]
             returns:              float tensor of shape [batch_size,]
+
+        Returns:
+            {name : loss}
         """
         action_log_probs, entropy = self._evaluate_actions(env_states, actions)
 
@@ -150,7 +161,11 @@ class PPO(PG):
                 self.entropy_coef * entropy_loss)
 
         self._optimize(loss)
-        # TODO log these losses
+        return {
+            'actor': actor_loss.item(),
+            'critic': actor_loss.item(),
+            'entropy': entropy_loss.item(),
+        }
 
 
 POLICY_CLASSES = {

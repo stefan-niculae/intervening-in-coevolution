@@ -10,6 +10,8 @@ TEAM_NAMES = [
     'Guardians'
 ]
 
+DESCRIPTIVE_STATS = ['mean', 'max']  # any combination of ['min', 'mean', 'std', 'max']
+
 
 def log_layers(team_policies: List[Policy], writer: SummaryWriter, update_number: int):
     """ Adds histograms of all parameters and their gradients """
@@ -22,7 +24,7 @@ def log_layers(team_policies: List[Policy], writer: SummaryWriter, update_number
 
 def log_descriptive_statistics(array: np.array, prefix: str, writer, update_number: int,  axis=0):
     """ Min, max, std avg """
-    for op in ['min', 'max', 'mean', 'std']:
+    for op in DESCRIPTIVE_STATS:
         writer.add_scalar(
             prefix + (op if op != 'mean' else 'avg'),
             getattr(array, op)(axis=axis),
@@ -30,12 +32,8 @@ def log_descriptive_statistics(array: np.array, prefix: str, writer, update_numb
         )
 
 
-def log_scalars(total_reward: np.array, steps_alive: np.array, writer: SummaryWriter, update_number: int):
-    """
-    Args:
-        total_reward: float array-like of shape [num_episodes, num_avatars]
-        steps_alive: int array-like of shape [num_episodes, num_avatars]
-    """
+def log_scalars(training_history: (np.array, np.array, [dict]), writer: SummaryWriter, update_number: int):
+    total_reward, steps_alive, team_losses_history = training_history
     total_reward = np.asarray(total_reward)
     steps_alive  = np.asarray(steps_alive)
 
@@ -45,3 +43,16 @@ def log_scalars(total_reward: np.array, steps_alive: np.array, writer: SummaryWr
         for avatar_id in range(num_avatars):
             log_descriptive_statistics(array[:, avatar_id], f'{name}/avatar-{avatar_id}/', writer, update_number)
 
+    for team, tlh in enumerate(team_losses_history):
+        # From [{actor: a1, critic: c1}, {actor: a2, critic: c2}]
+        # to {actor: [a1, a2], critic: [c1, c2]}
+        transposed = {
+            loss_name: np.zeros(len(tlh))
+            for loss_name in tlh[0]
+        }
+        for i, losses in enumerate(tlh):
+            for name, value in losses.items():
+                transposed[name][i] = value
+
+        for loss_name, values in transposed.items():
+            log_descriptive_statistics(values, f'loss/{TEAM_NAMES[team]}/{loss_name}/', writer, update_number)
