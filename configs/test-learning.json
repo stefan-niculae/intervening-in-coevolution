@@ -1,0 +1,23 @@
+{
+  "scenario": "4x4-thief-treasure",
+
+  "algorithm": "pg",
+  "controller": "fc",
+
+  "hidden_layer_size": 32,
+  "activation_function": "lrelu",
+
+  "lr": 0.01,
+  "lr_decay_interval": 50,
+  "lr_decay_factor": 0.5,
+  "entropy_coef": 0.001,
+
+  "num_updates": 100,
+  "num_transitions": 2000,
+  "num_batches": 5,
+  "num_epochs": 5,
+
+  "log_interval": 1,
+  "eval_interval": 10,
+  "save_interval": 100
+}
