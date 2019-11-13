@@ -1,6 +1,7 @@
 """ Routing avatars to storages and policies  """
 
 from typing import List
+import numpy as np
 
 from configs.structure import Config
 from environment.thieves_guardians_env import TGEnv
@@ -38,11 +39,14 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     actions          = [0] * env.num_avatars
     action_log_probs = [0] * env.num_avatars
 
+    episode_rewards = np.zeros(env.num_avatars)
+
     # Collect rollouts
     # TODO (?): collect in parallel
     for step in range(config.num_transitions):
         if all(dones):
             env_states = env.reset()
+            print('total rewards (per avatar) this episode', episode_rewards)
 
         # Alive at the beginning of step
         avatar_alive = env.avatar_alive.copy()
@@ -57,6 +61,8 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
 
         # Step the environment with one action for each avatar
         env_states, rewards, dones, infos = env.step(actions)
+
+        episode_rewards += rewards
 
         # Insert transitions for alive avatars
         for avatar_id in range(env.num_avatars):
