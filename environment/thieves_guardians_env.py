@@ -137,8 +137,8 @@ class TGEnv:
 
         """
         info = {}
-        done = np.zeros(self.num_avatars, bool)
-        reward          = np.zeros(self.num_avatars, float)
+        done   = np.zeros(self.num_avatars, bool)
+        reward = np.zeros(self.num_avatars, float)
 
         for avatar_id in range(self.num_avatars):
             if not self.avatar_alive[avatar_id]:

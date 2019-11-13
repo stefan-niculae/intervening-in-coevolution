@@ -44,8 +44,8 @@ def main(config_path: str):
 
         # Evaluate and record video
         if do_this_iteration(config.eval_interval, update_number, config.num_updates):
-            maps, pos2ids = evaluate(env, policies)
-            create_animation(maps, pos2ids, video_path % update_number)
+            history = evaluate(env, policies)
+            create_animation(history, video_path % update_number)
 
         # Checkpoint current model weights
         if do_this_iteration(config.save_interval, update_number, config.num_updates):

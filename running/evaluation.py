@@ -1,3 +1,5 @@
+import numpy as np
+
 from typing import List
 from copy import copy
 
@@ -6,18 +8,21 @@ from agent.policies import Policy
 
 
 def evaluate(env: TGEnv, team_policies: List[Policy]):
-    maps    = []
-    pos2ids = []
+    map_history     = []
+    pos2id_history  = []
+    rewards_history = []
 
     env_states = env.reset()
     dones = [False] * env.num_avatars
+    cumulative_reward = np.zeros(env.num_avatars)
 
     actions = [0] * env.num_avatars
     action_log_probs = [0] * env.num_avatars
 
     while not all(dones):
-        maps.append(env._map.copy())
-        pos2ids.append(copy(env._pos2id))
+        map_history.append(env._map.copy())
+        pos2id_history.append(copy(env._pos2id))
+        rewards_history.append(cumulative_reward.copy())
 
         # Alive at the beginning of step
         avatar_alive = env.avatar_alive.copy()
@@ -32,9 +37,11 @@ def evaluate(env: TGEnv, team_policies: List[Policy]):
 
         # Step the environment with one action for each avatar
         env_states, rewards, dones, infos = env.step(actions)
+        cumulative_reward += rewards
 
     # Add final state as well
-    maps.append(env._map.copy())
-    pos2ids.append(copy(env._pos2id))
+    map_history    .append(env._map.copy())
+    pos2id_history .append(copy(env._pos2id))
+    rewards_history.append(cumulative_reward.copy())
 
-    return maps, pos2ids
+    return map_history, pos2id_history, rewards_history
