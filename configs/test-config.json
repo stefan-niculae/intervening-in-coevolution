@@ -1,11 +1,15 @@
 {
-  "scenario": "4x4-thief-treasure",
-  "num_processes": 2,
-  "num_updates": 5,
-  "num_transitions": 10,
-  "num_batches": 1,
-  "batch_size": 4,
-  "eval_interval": 1,
+  "scenario": "3x3-test-2thief-1guardian",
+
+  "algorithm": "ppo",
+  "controller": "fc",
+
+  "num_updates": 10,
+  "num_transitions": 100,
+  "num_batches": 3,
+  "num_epochs": 2,
+
+  "eval_interval": 0,
   "log_interval": 1,
-  "save_interval": 1
+  "save_interval": 0
 }

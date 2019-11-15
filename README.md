@@ -4,7 +4,7 @@ Team project for USC course CS-566 _Deep Learning_
 
 ## Installation
 
-Requires Python 3.7
+Requires Python 3.7. Tested on MacOS and Windows 
 
 1. Python packages `pip install -r requirements.txt`
 2. Imagemagick
@@ -13,9 +13,16 @@ Requires Python 3.7
 
 ## Development
 
-If your model uses convolutions, [torch.nn.Conv2d](https://pytorch.org/docs/stable/nn.html#conv2d) expects channels first.
-
 Agent algorithms source: https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail
+
+- Each team gets their own `Policy`
+  - has a `Controller` 
+    - has an `.actor` and `.critic`
+  - defines how to update the `Controller` based on transitions
+- Each avatar gets its own `RolloutsStorage`
+  - stores transitions
+  - computes returns
+  - samples transitions
 
 
 ## Running

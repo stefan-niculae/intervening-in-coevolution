@@ -1,83 +1,113 @@
-""" Decoupled steps (initialize and update) of the learning process  """
+""" Routing avatars to storages and policies  """
 
+from typing import List
 import numpy as np
-import torch
 
-from environment.parallelization import make_vec_envs, VecEnv
-from agent.policies import Policy
-from agent.algorithms import PPO
+from configs.structure import Config
+from environment.thieves_guardians_env import TGEnv
+from agent.policies import POLICY_CLASSES, Policy
 from agent.storage import RolloutStorage
 
 
-def instantiate(config, device):
-    """ Instantiate the environment, policy, agent, storage """
-    envs = make_vec_envs(config, device)
+def instantiate(config: Config) -> (TGEnv, List[Policy], List[RolloutStorage]):
+    """ Instantiate the environment, agents and storages """
+    env = TGEnv(config.scenario)
 
-    policy = Policy(
-        envs.observation_space.shape,
-        envs.action_space,
-        num_controllers=2,  # TODO don't hardcode this
-        controller_kind=config.controller,
-        controller_kwargs={'is_recurrent': False})
-    policy.to(device)
+    # Each avatar has its own storage (because they do not all die at the same time)
+    avatar_storages = [
+        RolloutStorage(config, env.state_shape)
+        for _ in range(env.num_avatars)
+    ]
 
-    if config.algorithm != 'PPO':
-        raise NotImplemented
-    agent = PPO(policy, config)
+    # Each team has its own copy of the policy
+    policy_class = POLICY_CLASSES[config.algorithm]
+    team_policies = [
+        policy_class(config, env.state_shape, env.num_actions)
+        for _ in range(env.num_teams)
+    ]
 
-    rollouts = RolloutStorage(config,
-        envs.num_avatars, envs.observation_space.shape, envs.action_space,
-        policy.recurrent_hidden_state_size)
-
-    obs = envs.reset()
-    rollouts.env_state[0].copy_(obs)
-
-    lr_decay = torch.optim.lr_scheduler.StepLR(
-        agent.optimizer, config.lr_decay_interval, config.lr_decay_factor)
-
-    return envs, policy, agent, rollouts, lr_decay
+    return env, team_policies, avatar_storages
 
 
-def perform_update(config, envs: VecEnv, policy: Policy, agent: PPO, rollouts: RolloutStorage):
-    """ Runs the agent on the env and updates the model """
+class EpisodeAccumulator:
+    def __init__(self, size):
+        self.history = []
+        self.current = np.zeros(size)
 
-    episode_number_history = np.zeros((config.num_transitions - 1, config.num_processes))
-    current_episode_number = np.zeros(config.num_processes)
+    def episode_over(self):
+        self.history.append(self.current.copy())
+        self.current[:] = 0
 
-    for step in range(config.num_transitions - 1):
-        # Sample actions
-        with torch.no_grad():
-            value_pred, action, action_prob, rec_state = policy.pick_action(
-                rollouts.controller[step],
-                rollouts.env_state[step],
-                rollouts.rec_state[step],
-                rollouts.done[step])
 
-        # Simulate the environment
-        env_state, reward, all_done, infos = envs.step(action)
-        reward = torch.transpose(reward, 1, 2)
+def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_storages: List[RolloutStorage]):
+    """ Collects rollouts and updates """
+    actions          = [0] * env.num_avatars
+    action_log_probs = [0] * env.num_avatars
 
-        # Gather extra return values from all processes
-        individual_done = torch.FloatTensor([i['individual_done'] for i in infos])
-        individual_done.unsqueeze_(-1)
-        controller = np.array([i['controller'] for i in infos])
+    total_rewards = EpisodeAccumulator(env.num_avatars)
+    steps_alive   = EpisodeAccumulator(env.num_avatars)
 
-        rollouts.insert(env_state, rec_state, action, action_prob, value_pred, reward, individual_done, controller)
+    # Always start with a fresh env
+    env_states = env.reset()  # shape: [num_avatars, *env_state_shape]
 
-        episode_number_history[step] = current_episode_number.copy()
-        # When one of the environments is done, increment its run number
-        current_episode_number += all_done
+    # Collect rollouts
+    # TODO (?): collect in parallel
+    for step in range(config.num_transitions):
+        # Alive at the beginning of step
+        avatar_alive = env.avatar_alive.copy()
 
-    # Estimate value of env state we arrived in
-    with torch.no_grad():
-        next_value = policy.get_value(
-            rollouts.controller[-1],
-            rollouts.env_state[-1],
-            rollouts.rec_state[-1],
-            rollouts.done[-1]).detach()
-    rollouts.compute_returns(next_value)
+        # Run each alive avatar individually
+        for avatar_id in range(env.num_avatars):
+            if avatar_alive[avatar_id]:
+                # Chose action based on the policy
+                team = env.id2team[avatar_id]
+                policy = team_policies[team]
+                actions[avatar_id], action_log_probs[avatar_id] = policy.pick_action(env_states[avatar_id])
 
-    value_loss, action_loss, dist_entropy = agent.update(rollouts)
+        # Step the environment with one action for each avatar
+        env_states, rewards, dones, infos = env.step(actions)
+        # TODO log infos
 
-    return value_loss, action_loss, dist_entropy, episode_number_history
+        # Insert transitions for alive avatars
+        for avatar_id in range(env.num_avatars):
+            if avatar_alive[avatar_id]:
+                storage = avatar_storages[avatar_id]
+                storage.insert(
+                    env_states[avatar_id],
+                    actions[avatar_id],
+                    action_log_probs[avatar_id],
+                    rewards[avatar_id],
+                    dones[avatar_id],
+                )
 
+        total_rewards.current += rewards
+        steps_alive.current   += avatar_alive
+
+        # Episode is done
+        if all(dones):
+            env_states = env.reset()
+            total_rewards.episode_over()
+            steps_alive  .episode_over()
+
+    # Compute returns for all storages
+    for storage in avatar_storages:
+        storage.compute_returns()
+
+    # Update policies
+    losses_history = [[] for _ in range(env.num_teams)]
+    for epoch in range(config.num_epochs):
+        for avatar_id in range(env.num_avatars):
+            team = env.id2team[avatar_id]
+            policy = team_policies[team]
+            storage = avatar_storages[avatar_id]
+
+            for batch in storage.sample_batches():
+                losses = policy.update(*batch)
+                losses_history[team].append(losses)
+
+    # Prepare storages for the next update
+    for storage in avatar_storages:
+        storage.reset()
+
+    # Ignore last episode since it's most likely unfinished
+    return total_rewards.history[:-1], steps_alive.history[:-1], losses_history
