@@ -52,8 +52,7 @@ def main(config_path: str):
         if do_this_iteration(config.save_interval, update_number, config.num_updates):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
-                torch.save(policies, checkpoint_path)
-            torch.save(policies, checkpoint_path)
+                torch.save(policies, checkpoint_path % update_number)
 
     # Flush logs
     logs_writer.close()

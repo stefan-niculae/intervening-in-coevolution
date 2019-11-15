@@ -33,7 +33,7 @@ class Policy:
             action_log_prob: float
         """
         env_state = torch.tensor(env_state, dtype=torch.float32)
-        env_state = env_state.unsqueeze_(0)  # set a batch size of 1
+        env_state = env_state.unsqueeze_(0)  # set a batch size of 1: from [C, W, H] to [1, C, W, H]
 
         actor_logits = self.controller.actor(env_state)  # float tensor of shape [1, num_actions]
         action_distributions = Categorical(logits=actor_logits)  # float tensor of shape [1, num_actions]
@@ -105,9 +105,7 @@ class PG(Policy):
             {name : loss}
         """
         action_log_probs, entropy = self._evaluate_actions(env_states, actions)
-        # print('min action log probs', action_log_probs.min())
 
-        # print('sum action log probs', sum(action_log_probs))
         policy_loss = -(action_log_probs * returns).mean()
         entropy_loss = -entropy.mean()
         loss = policy_loss + self.entropy_coef * entropy_loss

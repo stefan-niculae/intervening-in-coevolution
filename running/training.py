@@ -19,7 +19,7 @@ def instantiate(config: Config) -> (TGEnv, List[Policy], List[RolloutStorage]):
         for _ in range(env.num_avatars)
     ]
 
-    # Each team has its own policy
+    # Each team has its own copy of the policy
     policy_class = POLICY_CLASSES[config.algorithm]
     team_policies = [
         policy_class(config, env.state_shape, env.num_actions)
@@ -48,7 +48,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     steps_alive   = EpisodeAccumulator(env.num_avatars)
 
     # Always start with a fresh env
-    env_states = env.reset()
+    env_states = env.reset()  # shape: [num_avatars, *env_state_shape]
 
     # Collect rollouts
     # TODO (?): collect in parallel
