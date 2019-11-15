@@ -1,5 +1,6 @@
 """ Maps env state to action and provides rules on how to update inner controller """
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.distributions.categorical import Categorical
@@ -9,6 +10,31 @@ from agent.controllers import CONTROLLER_CLASSES
 
 
 class Policy:
+    """ Abstract class """
+    def __init__(self, config: Config, env_state_shape, num_actions):
+        pass
+
+    def pick_action(self, env_state, deterministic=False):
+        return None, None
+
+    def update(self, env_states, actions, old_action_log_probs, returns):
+        pass
+
+
+class RandomPolicy(Policy):
+    def __init__(self, config: Config, env_state_shape, num_actions):
+        self.num_actions = num_actions
+
+    def pick_action(self, env_state, deterministic=False):
+        action = np.random.randint(self.num_actions)
+        log_prob = 0.
+        return action, log_prob
+
+    def update(self, *args):
+        pass
+
+
+class LearningPolicy(Policy):
     def __init__(self, config: Config, env_state_shape, num_actions):
         controller_class = CONTROLLER_CLASSES[config.controller]
         self.controller = controller_class(config, env_state_shape, num_actions)
@@ -168,6 +194,7 @@ class PPO(PG):
 POLICY_CLASSES = {
     'pg': PG,
     'ppo': PPO,
+    'random': RandomPolicy,
 }
 
 

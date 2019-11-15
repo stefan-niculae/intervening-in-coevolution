@@ -5,7 +5,7 @@ import numpy as np
 
 from configs.structure import Config
 from environment.thieves_guardians_env import TGEnv
-from agent.policies import POLICY_CLASSES, Policy
+from agent.policies import POLICY_CLASSES, Policy, LearningPolicy
 from agent.storage import RolloutStorage
 
 
@@ -101,9 +101,10 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
             policy = team_policies[team]
             storage = avatar_storages[avatar_id]
 
-            for batch in storage.sample_batches():
-                losses = policy.update(*batch)
-                losses_history[team].append(losses)
+            if isinstance(policy, LearningPolicy):
+                for batch in storage.sample_batches():
+                    losses = policy.update(*batch)
+                    losses_history[team].append(losses)
 
     # Prepare storages for the next update
     for storage in avatar_storages:

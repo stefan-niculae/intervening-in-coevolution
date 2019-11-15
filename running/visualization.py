@@ -3,7 +3,7 @@ import numpy as np
 from typing import List
 from torch.utils.tensorboard import SummaryWriter
 
-from agent.policies import Policy
+from agent.policies import Policy, LearningPolicy
 
 TEAM_NAMES = [
     'Thieves',
@@ -16,6 +16,10 @@ DESCRIPTIVE_STATS = ['mean', 'max']  # any combination of ['min', 'mean', 'std',
 def log_layers(team_policies: List[Policy], writer: SummaryWriter, update_number: int):
     """ Adds histograms of all parameters and their gradients """
     for team_name, policy in zip(TEAM_NAMES, team_policies):
+        # Random policies have no controllers
+        if not isinstance(policy, LearningPolicy):
+            continue
+
         for layer_name, layer_params in policy.controller.named_parameters():
             writer.add_histogram(f'weights/{team_name}/{layer_name}', layer_params, update_number)
             if layer_params.grad is not None:
@@ -44,6 +48,10 @@ def log_scalars(training_history: (np.array, np.array, [dict]), writer: SummaryW
             log_descriptive_statistics(array[:, avatar_id], f'{name}/avatar-{avatar_id}/', writer, update_number)
 
     for team, tlh in enumerate(team_losses_history):
+        # Random policies don't have losses to log
+        if not tlh:
+            continue
+
         # From [{actor: a1, critic: c1}, {actor: a2, critic: c2}]
         # to {actor: [a1, a2], critic: [c1, c2]}
         transposed = {
