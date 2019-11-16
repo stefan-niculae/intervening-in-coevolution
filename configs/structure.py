@@ -31,6 +31,10 @@ class Config:
 
     activation_function: str = 'relu'  # lrelu | relu | tanh
 
+    num_recurrent_layers: int = 1
+
+    recurrent_layer_size: int = 16
+
     """ Running """
     # Random seed
     seed: int = 0
@@ -41,8 +45,8 @@ class Config:
     # Gather this many transitions before running a model update
     num_transitions: int = 1000
 
-    # In how many batches to split the transitions
-    num_batches: int = 5
+    # How large the batches of transitions should be
+    batch_size: int = 5
 
     # How many times to iterate over all transitions
     num_epochs: int = 5

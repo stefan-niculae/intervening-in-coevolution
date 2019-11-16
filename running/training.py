@@ -39,16 +39,46 @@ class EpisodeAccumulator:
         self.current[:] = 0
 
 
+def _get_initial_recurrent_state(avatar_policies):
+    """
+    Gets rec_h0 and rec_c0 if the policy has a controller
+
+    Args:
+        avatar_policies: list of Policy objects, length env.num_avatars
+
+    Returns:
+        rec_hs: list of float tensor of shape [num_recurrent_layers, 1, recurrent_size], length env.num_avatars
+        rec_cs: list of float tensor of shape [num_recurrent_layers, 1, recurrent_size], length env.num_avatars
+            or None if the policy is not
+    """
+    rec_hs = [None] * len(avatar_policies)
+    rec_cs = [None] * len(avatar_policies)
+    for i, policy in enumerate(avatar_policies):
+        if isinstance(policy, LearningPolicy):
+            rec_hs[i] = policy.controller.rec_h0
+            rec_cs[i] = policy.controller.rec_c0
+    return rec_hs, rec_cs
+
+
 def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_storages: List[RolloutStorage]):
     """ Collects rollouts and updates """
-    actions          = [0] * env.num_avatars
-    action_log_probs = [0] * env.num_avatars
 
+    # Used to log
     total_rewards = EpisodeAccumulator(env.num_avatars)
     steps_alive   = EpisodeAccumulator(env.num_avatars)
 
+    # Will be filled in for each avatar when stepping the environment individually
+    actions          = [0] * env.num_avatars
+    action_log_probs = [0] * env.num_avatars
+
+    avatar_policies = [
+        team_policies[env.id2team[avatar_id]]
+        for avatar_id in range(env.num_avatars)
+    ]
+
     # Always start with a fresh env
     env_states = env.reset()  # shape: [num_avatars, *env_state_shape]
+    rec_hs, rec_cs = _get_initial_recurrent_state(avatar_policies)
 
     # Collect rollouts
     # TODO (?): collect in parallel
@@ -62,7 +92,17 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                 # Chose action based on the policy
                 team = env.id2team[avatar_id]
                 policy = team_policies[team]
-                actions[avatar_id], action_log_probs[avatar_id] = policy.pick_action(env_states[avatar_id])
+
+                (
+                    actions[avatar_id],
+                    action_log_probs[avatar_id],
+                    rec_hs[avatar_id],
+                    rec_cs[avatar_id],
+                ) = policy.pick_action(
+                    env_states[avatar_id],
+                    rec_hs[avatar_id],
+                    rec_cs[avatar_id],
+                )
 
         # Step the environment with one action for each avatar
         env_states, rewards, dones, infos = env.step(actions)
@@ -78,6 +118,8 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                     action_log_probs[avatar_id],
                     rewards[avatar_id],
                     dones[avatar_id],
+                    rec_hs[avatar_id],
+                    rec_cs[avatar_id]
                 )
 
         total_rewards.current += rewards
@@ -86,6 +128,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
         # Episode is done
         if all(dones):
             env_states = env.reset()
+            rec_hs, rec_cs = _get_initial_recurrent_state(avatar_policies)
             total_rewards.episode_over()
             steps_alive  .episode_over()
 
@@ -103,6 +146,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
 
             if isinstance(policy, LearningPolicy):
                 for batch in storage.sample_batches():
+                    # A batch contains multidimensional env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns
                     losses = policy.update(*batch)
                     losses_history[team].append(losses)
 
