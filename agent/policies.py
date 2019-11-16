@@ -110,7 +110,7 @@ class LearningPolicy(Policy):
         raise NotImplemented
 
 
-class PG(Policy):
+class PG(LearningPolicy):
     """ Policy Gradient - single actor """
     def __init__(self, config: Config, env_state_shape, num_actions):
         super().__init__(config, env_state_shape, num_actions)
