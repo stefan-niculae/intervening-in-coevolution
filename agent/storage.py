@@ -9,13 +9,14 @@ class RolloutStorage:
     def __init__(self, config, env_state_shape):
         """ Instantiate empty (zero) tensors """
         self.num_batches = config.num_batches
+        self.batch_size = config.num_transitions // config.num_batches
         self.discount = config.discount
 
         self.env_states       = torch.zeros(config.num_transitions, *env_state_shape, dtype=torch.float32)
         self.actions          = torch.zeros(config.num_transitions, dtype=torch.int64)
         self.action_log_probs = torch.zeros(config.num_transitions, dtype=torch.float32)
         self.rewards          = torch.zeros(config.num_transitions, dtype=torch.float32)
-        self.dones            = torch.zeros(config.num_transitions, dtype=torch.float32)
+        self.dones            = torch.zeros(config.num_transitions + 1, dtype=torch.float32)
         self.returns          = torch.zeros(config.num_transitions + 1, requires_grad=False, dtype=torch.float32)
 
         self.step = None
@@ -55,7 +56,7 @@ class RolloutStorage:
 
         # Accumulate discounted returns
         for step in reversed(range(self.last_done+1)):
-            self.returns[step] = self.returns[step + 1] * self.discount * (1 - self.dones[step]) + self.rewards[step]
+            self.returns[step] = self.returns[step + 1] * self.discount * (1 - self.dones[step + 1]) + self.rewards[step]
             # TODO (?) GAE
 
     def sample_batches(self):
@@ -73,7 +74,7 @@ class RolloutStorage:
         # each having approximately config.num_transitions // config.num_batches samples
         sampler = BatchSampler(
             SubsetRandomSampler(range(self.last_done)),
-            self.num_batches,
+            self.batch_size,
             drop_last=True)
 
         for indices in sampler:
