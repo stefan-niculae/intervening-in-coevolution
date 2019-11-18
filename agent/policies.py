@@ -12,58 +12,32 @@ from agent.controllers import CONTROLLER_CLASSES
 class Policy:
     """ Abstract class """
     def __init__(self, config: Config, env_state_shape, num_actions):
-        pass
-
-    def pick_action(self, env_state, rec_h, rec_c, deterministic=False):
-        """
-        Args:
-            env_state:     float array of shape env_state_shape
-            rec_h:         float tensor of shape [num_recurrent_layers, 1, recurrent_layer_size]
-            rec_c:         float tensor of shape [num_recurrent_layers, 1, recurrent_layer_size]
-            deterministic: bool -- when True, it always picks the most probable action
-        """
-        return None, None
-
-    def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns):
-        """
-        Args:
-            env_states:           float tensor of shape [batch_size, *env_state_shape]
-            rec_hs:               float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
-            rec_cs:               float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
-            actions:              int tensor of shape  [batch_size,]
-            old_action_log_probs: float tensor of shape [batch_size,]
-            returns:              float tensor of shape [batch_size,]
-
-        """
-        pass
-
-
-class RandomPolicy(Policy):
-    def __init__(self, config: Config, env_state_shape, num_actions):
-        self.num_actions = num_actions
-
-    def pick_action(self, *args):
-        action = np.random.randint(self.num_actions)
-        log_prob = 0.
-        return action, log_prob
-
-
-class LearningPolicy(Policy):
-    def __init__(self, config: Config, env_state_shape, num_actions):
         controller_class = CONTROLLER_CLASSES[config.controller]
         self.controller = controller_class(config, env_state_shape, num_actions)
         self.entropy_coef = config.entropy_coef
+        self.entropy_coef_decay_interval = config.entropy_coef_decay_interval
+        self.entropy_coef_decay_factor = config.entropy_coef_decay_factor
+        self.update_number = 0
+
         self.max_grad_norm = config.max_grad_norm
         self.all_parameters = list(self.controller.parameters())
+
+        self.num_actions = num_actions
+        self.one_fewer_action_probas = np.full(num_actions, 1 / (num_actions - 1))
 
     def _create_optimizer(self, config: Config):
         self.optimizer = torch.optim.Adam(self.all_parameters, lr=config.lr)
         self.lr_decay = torch.optim.lr_scheduler.StepLR(self.optimizer, config.lr_decay_interval, config.lr_decay_factor)
 
-    def pick_action(self, env_state, rec_h, rec_c, deterministic=False):
+    def pick_action(self, env_state, rec_h, rec_c, explore_proba: float, deterministic: bool, forced_action: int = None):
         """
-        In the given env_state, pick a single action either by sampling or most probable one (when deterministic=True)
+        In the given env_state, pick a single action.
         Called during rollouts collection to generate the next action, one by one
+
+        Args:
+            env_state:     float array of shape env_state_shape
+            rec_h:         float tensor of shape [num_recurrent_layers, 1, recurrent_layer_size]
+            rec_c:         float tensor of shape [num_recurrent_layers, 1, recurrent_layer_size]
 
         Returns:
             action: int
@@ -83,19 +57,45 @@ class LearningPolicy(Policy):
         )
 
         action_distributions = Categorical(logits=actor_logits)  # float tensor of shape [1, num_actions]
-        if deterministic:  # pick most probable
-            action = action_distributions.probs.argmax()
+        if forced_action is not None:
+            # Action is pre-computed
+            action = torch.LongTensor([forced_action])
         else:
-            action = action_distributions.sample()
-        action_log_probs = action_distributions.log_prob(action)
+            most_likely = action_distributions.probs.argmax()
+            # Explore uniformly (but not the most probable action)
+            if np.random.rand() < explore_proba:
+                probas = self.one_fewer_action_probas.copy()
+                probas[most_likely.item()] = 0
+                action = np.random.choice(self.num_actions, p=probas)
+                action = torch.LongTensor([action])
+            elif deterministic:
+                # Pick most probable
+                action = most_likely
+            else:
+                # Sample according to the learned distribution
+                action = action_distributions.sample()
+        action_log_prob = action_distributions.log_prob(action)
 
         return (
             action.item(),
-            action_log_probs.item(),
+            action_log_prob.item(),
             actor_logits,
             h,
             c,
         )
+
+    def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns):
+        """
+        Args:
+            env_states:           float tensor of shape [batch_size, *env_state_shape]
+            rec_hs:               float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
+            rec_cs:               float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
+            actions:              int tensor of shape  [batch_size,]
+            old_action_log_probs: float tensor of shape [batch_size,]
+            returns:              float tensor of shape [batch_size,]
+
+        """
+        pass
 
     def _evaluate_actions(self, env_states, rec_hs, rec_cs, actions):
         """
@@ -128,10 +128,15 @@ class LearningPolicy(Policy):
         loss.backward(retain_graph=True)  # retain_graph=True so that backward passes thorugh the same hidden recurrent states work
         nn.utils.clip_grad_norm_(self.all_parameters, self.max_grad_norm)
         self.optimizer.step()
+
+    def end_of_update(self):
         self.lr_decay.step(None)
+        self.update_number += 1
+        if self.update_number % self.entropy_coef_decay_interval == 0:
+            self.entropy_coef *= self.entropy_coef_decay_factor
 
 
-class PG(LearningPolicy):
+class PG(Policy):
     """ Policy Gradient - single actor """
     def __init__(self, config: Config, env_state_shape, num_actions):
         super().__init__(config, env_state_shape, num_actions)
@@ -192,7 +197,7 @@ class PPO(PG):
         self._optimize(loss)
         return {
             'actor': actor_loss.item(),
-            'critic': actor_loss.item(),
+            'critic': critic_loss.item(),
             'entropy': entropy_loss.item(),
         }
 
@@ -200,7 +205,6 @@ class PPO(PG):
 POLICY_CLASSES = {
     'pg': PG,
     'ppo': PPO,
-    'random': RandomPolicy,
 }
 
 

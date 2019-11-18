@@ -4,7 +4,7 @@ from typing import List
 
 from configs.structure import Config
 from environment.thieves_guardians_env import TGEnv
-from agent.policies import POLICY_CLASSES, Policy, LearningPolicy
+from agent.policies import POLICY_CLASSES, Policy
 from agent.storage import RolloutStorage
 from running.utils import EpisodeAccumulator, softmax
 
@@ -44,13 +44,13 @@ def _get_initial_recurrent_state(avatar_policies):
     rec_hs = [None] * len(avatar_policies)
     rec_cs = [None] * len(avatar_policies)
     for i, policy in enumerate(avatar_policies):
-        if isinstance(policy, LearningPolicy) and policy.controller.is_recurrent:
+        if policy.controller.is_recurrent:
             rec_hs[i] = policy.controller.rec_h0
             rec_cs[i] = policy.controller.rec_c0
     return rec_hs, rec_cs
 
 
-def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_storages: List[RolloutStorage]):
+def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_storages: List[RolloutStorage], action_sampling):
     """ Collects rollouts and updates """
 
     # Used to log
@@ -97,9 +97,11 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                     env_states[avatar_id],
                     rec_hs[avatar_id],
                     rec_cs[avatar_id],
+                    deterministic=False,
+                    explore_proba=0,
                 )
 
-                if first_episode_step and isinstance(policy, LearningPolicy):
+                if first_episode_step:
                     first_step_probas.current[avatar_id] = softmax(actor_logits.detach().numpy().flatten())
 
         # Step the environment with one action for each avatar
@@ -154,15 +156,17 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
             policy = team_policies[team]
             storage = avatar_storages[avatar_id]
 
-            if isinstance(policy, LearningPolicy):
-                for batch in storage.sample_batches():
-                    # A batch contains multidimensional env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns
-                    losses = policy.update(*batch)
-                    losses_history[team].append(losses)
+            for batch in storage.sample_batches():
+                # A batch contains multidimensional env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns
+                losses = policy.update(*batch)
+                losses_history[team].append(losses)
 
     # Prepare storages for the next update
     for storage in avatar_storages:
         storage.reset()
+
+    for policy in team_policies:
+        policy.end_of_update()
 
     # Ignore last episode since it's most likely unfinished
     return (

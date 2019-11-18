@@ -28,6 +28,13 @@ class Config:
     # Encourage "exploration"
     entropy_coef: float = .01
 
+    entropy_coef_decay_interval: int = 10
+
+    entropy_coef_decay_factor: float = .1
+
+    # Force exploration
+    uniform_exploration_proba: float = .1
+
     """ Controller """
     # Controller architecture — check agent/controllers.py
     controller: str = 'conv'  # fc | conv
@@ -46,8 +53,12 @@ class Config:
     # Random seed
     seed: int = 0
 
+    num_demonstrative_updates: int = 10
+
+    num_random_updates: int = 3
+
     # Number of model updates
-    num_updates: int = 100
+    num_unguided_updates: int = 100
 
     # Gather this many transitions before running a model update
     num_transitions: int = 1000

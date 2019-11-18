@@ -8,10 +8,15 @@
   "num_recurrent_layers": 0,
   "num_hidden_layers": 1,
 
-  "num_updates": 10,
+  "num_unguided_updates": 10,
   "num_transitions": 100,
   "batch_size": 16,
   "num_epochs": 1,
+
+  "entropy_coef": 0.1,
+  "entropy_coef_decay_interval": 2,
+  "entropy_coef_decay_factor": 0.1,
+
 
   "log_interval": 1,
   "eval_interval": 0,

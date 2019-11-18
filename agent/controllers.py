@@ -21,7 +21,7 @@ ACTIVATION_FUNCTIONS = {
 
 
 # TODO (?) TransformerController
-# TODO (?) batch normalization, dropout, etc
+# TODO (?) batch normalization, residual connection, etc
 
 class RecurrentController(nn.Module):
     def __init__(self, config: Config, env_state_shape: tuple, num_actions: int):

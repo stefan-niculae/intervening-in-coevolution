@@ -3,7 +3,7 @@ import numpy as np
 from typing import List
 from torch.utils.tensorboard import SummaryWriter
 
-from agent.policies import Policy, LearningPolicy
+from agent.policies import Policy
 
 TEAM_NAMES = [
     'Thieves',
@@ -16,10 +16,6 @@ DESCRIPTIVE_STATS = ['mean', 'max']  # any combination of ['min', 'mean', 'std',
 def log_layers(team_policies: List[Policy], writer: SummaryWriter, update_number: int):
     """ Adds histograms of all parameters and their gradients """
     for team_name, policy in zip(TEAM_NAMES, team_policies):
-        # Random policies have no controllers
-        if not isinstance(policy, LearningPolicy):
-            continue
-
         for layer_name, layer_params in policy.controller.named_parameters():
             writer.add_histogram(f'weights/{team_name}/{layer_name}', layer_params, update_number)
             if layer_params.grad is not None:
