@@ -3,7 +3,7 @@ import numpy as np
 from typing import List
 from copy import copy
 
-from environment.thieves_guardians_env import TGEnv, ACTION_IDX2SYMBOL
+from environment.thieves_guardians_env import TGEnv, ACTION_IDX2SYMBOL, NOOP
 from agent.policies import Policy
 from running.training import _get_initial_recurrent_state
 
@@ -53,6 +53,8 @@ def evaluate(env: TGEnv, team_policies: List[Policy], deterministic: bool):
                     rec_cs[avatar_id],
                     deterministic=deterministic
                 )
+            else:
+                actions[avatar_id] = DEAD
 
         # Step the environment with one action for each avatar
         env_states, rewards, dones, infos = env.step(actions)
@@ -63,6 +65,6 @@ def evaluate(env: TGEnv, team_policies: List[Policy], deterministic: bool):
     map_history    .append(env._map.copy())
     pos2id_history .append(copy(env._pos2id))
     rewards_history.append(cumulative_reward.copy())
-    actions_history.append([ACTION_IDX2SYMBOL['dead']] * env.num_avatars)
+    actions_history.append([ACTION_IDX2SYMBOL[DEAD]] * env.num_avatars)
 
     return map_history, pos2id_history, rewards_history, actions_history

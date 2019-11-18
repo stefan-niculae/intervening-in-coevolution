@@ -18,13 +18,15 @@ LEFT  = 2
 RIGHT = 3
 NOOP  = 4  # must be last one
 
+
+DEAD = -1
 ACTION_IDX2SYMBOL = {
     UP:     '⬆️',
     DOWN:   '⬇️',
     LEFT:   '⬅️',
     RIGHT:  '➡️️',
     NOOP:   'n',
-    'dead': '◼️',
+    DEAD:   '◼️',
 }
 
 action_idx2delta = {

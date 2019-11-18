@@ -1,3 +1,4 @@
+import numpy as np
 from pathlib import Path
 from datetime import datetime
 import os
@@ -64,3 +65,20 @@ def save_code(save_path: str):
 
     # Remove the temporary, unarchived folder
     rmtree(save_path)
+
+
+class EpisodeAccumulator:
+    def __init__(self, *shape):
+        self.history = []
+        self.current = np.zeros(*shape)
+
+    def episode_over(self):
+        self.history.append(self.current.copy())
+        self.current[:] = 0
+
+    def final_history(self, drop_last: bool) -> np.array:
+        history = np.array(self.history)
+        if drop_last:
+            return history[:-1]
+        else:
+            return history

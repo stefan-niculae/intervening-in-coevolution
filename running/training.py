@@ -7,6 +7,7 @@ from configs.structure import Config
 from environment.thieves_guardians_env import TGEnv
 from agent.policies import POLICY_CLASSES, Policy, LearningPolicy
 from agent.storage import RolloutStorage
+from running.utils import EpisodeAccumulator
 
 
 def instantiate(config: Config) -> (TGEnv, List[Policy], List[RolloutStorage]):
@@ -27,16 +28,6 @@ def instantiate(config: Config) -> (TGEnv, List[Policy], List[RolloutStorage]):
     ]
 
     return env, team_policies, avatar_storages
-
-
-class EpisodeAccumulator:
-    def __init__(self, size):
-        self.history = []
-        self.current = np.zeros(size)
-
-    def episode_over(self):
-        self.history.append(self.current.copy())
-        self.current[:] = 0
 
 
 def _get_initial_recurrent_state(avatar_policies):
@@ -64,8 +55,9 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     """ Collects rollouts and updates """
 
     # Used to log
-    total_rewards = EpisodeAccumulator(env.num_avatars)
-    steps_alive   = EpisodeAccumulator(env.num_avatars)
+    total_rewards     = EpisodeAccumulator(env.num_avatars)
+    steps_alive       = EpisodeAccumulator(env.num_avatars)
+    first_step_probas = EpisodeAccumulator(env.num_teams, env.num_actions)
 
     # Will be filled in for each avatar when stepping the environment individually
     actions          = [0] * env.num_avatars
@@ -80,6 +72,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     env_states = env.reset()  # shape: [num_avatars, *env_state_shape]
     rec_hs, rec_cs = _get_initial_recurrent_state(avatar_policies)
     next_rec_hs, next_rec_cs = rec_hs, rec_cs
+    first_episode_step = True
 
     # Collect rollouts
     # TODO (?): collect in parallel
@@ -104,6 +97,9 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                     rec_hs[avatar_id],
                     rec_cs[avatar_id],
                 )
+
+                if first_episode_step:
+                    first_step_probas.current[team] = np.exp(action_log_probs)
 
         # Step the environment with one action for each avatar
         next_env_states, rewards, dones, infos = env.step(actions)
@@ -130,8 +126,10 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
         if all(dones):
             env_states = env.reset()
             rec_hs, rec_cs = _get_initial_recurrent_state(avatar_policies)
-            total_rewards.episode_over()
-            steps_alive  .episode_over()
+            total_rewards    .episode_over()
+            steps_alive      .episode_over()
+            first_step_probas.episode_over()
+            first_episode_step = True
 
         # The states were not immediately overwritten because we store the state that was used to generate (env_states)
         # the action for the current time-step, not the one we arrive in (next_env_states)
@@ -139,6 +137,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
             env_states = next_env_states
             rec_hs = next_rec_hs
             rec_cs = next_rec_cs
+            first_episode_step = False
 
     # Compute returns for all storages
     for storage in avatar_storages:
@@ -163,4 +162,9 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
         storage.reset()
 
     # Ignore last episode since it's most likely unfinished
-    return total_rewards.history[:-1], steps_alive.history[:-1], losses_history
+    return (
+        total_rewards.final_history(drop_last=True),
+        steps_alive.final_history(drop_last=True),
+        first_step_probas.final_history(drop_last=False),
+        losses_history,
+    )
