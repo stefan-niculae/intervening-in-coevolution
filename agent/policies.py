@@ -90,7 +90,7 @@ class Policy:
             env_states:           float tensor of shape [batch_size, *env_state_shape]
             rec_hs:               float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
             rec_cs:               float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
-            actions:              int tensor of shape  [batch_size,]
+            actions:              int   tensor of shape [batch_size,]
             old_action_log_probs: float tensor of shape [batch_size,]
             returns:              float tensor of shape [batch_size,]
 

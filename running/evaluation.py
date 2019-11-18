@@ -52,7 +52,8 @@ def evaluate(env: TGEnv, team_policies: List[Policy], deterministic: bool):
                     env_states[avatar_id],
                     rec_hs[avatar_id],
                     rec_cs[avatar_id],
-                    deterministic=deterministic
+                    explore_proba=0,
+                    deterministic=deterministic,
                 )
             else:
                 actions[avatar_id] = DEAD
