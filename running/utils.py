@@ -22,7 +22,7 @@ def paths(config_path: str) -> (str, str, str, str):
     models_dir  = experiment_dir / TRAINED_MODELS_DIR
     videos_dir  = experiment_dir / VIDEOS_DIR
 
-    videos_path = videos_dir / 'rollout-%d.gif'
+    videos_path = videos_dir / 'rollout-%d (%s).gif'
     models_path = models_dir / 'checkpoint-%d.tar'
     config_save_path = experiment_dir / 'config.json'
     code_save_path   = experiment_dir / 'code'  # zip added automatically at the end!

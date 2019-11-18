@@ -45,8 +45,10 @@ def main(config_path: str):
 
         # Evaluate and record video
         if do_this_iteration(config.eval_interval, update_number, config.num_updates):
-            env_history = evaluate(env, policies)
-            create_animation(env_history, video_path % update_number)
+            for deterministic in [True, False]:
+                env_history = evaluate(env, policies, deterministic)
+                suffix = 'deterministic' if deterministic else 'sampling'
+                create_animation(env_history, video_path % (update_number, suffix))
 
         # Checkpoint current model weights
         if do_this_iteration(config.save_interval, update_number, config.num_updates):
