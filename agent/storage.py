@@ -74,7 +74,7 @@ class RolloutStorage:
 
         # Accumulate discounted returns
         for step in reversed(range(self.last_done+1)):
-            self.returns[step] = self.returns[step + 1] * self.discount * (1 - self.dones[step]) + self.rewards[step]
+            self.returns[step] = self.returns[step + 1] * self.discount * (1 - self.dones[step + 1]) + self.rewards[step]
             # TODO (?) GAE
 
     def sample_batches(self):
