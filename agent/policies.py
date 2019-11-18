@@ -142,7 +142,7 @@ class PG(LearningPolicy):
         Returns:
             {name : loss}
         """
-        action_log_probs, entropy = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
+        action_log_probs, entropy, _ = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
 
         policy_loss = -(action_log_probs * returns).mean()
         entropy_loss = -entropy.mean()
