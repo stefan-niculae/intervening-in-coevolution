@@ -43,9 +43,9 @@ def do_this_iteration(interval: int, current_iteration: int, total_iterations: i
     if current_iteration == total_iterations - 1:
         return True
 
-    # Do at the first step
+    # Don't do at the first step
     if current_iteration == 0:
-        return True
+        return False
 
     # Every `interval` steps
     return current_iteration % interval == 0

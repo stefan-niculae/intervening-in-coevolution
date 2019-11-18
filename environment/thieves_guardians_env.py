@@ -40,10 +40,10 @@ action_idx2delta = {
 
 # (thief reward, guardian reward)
 REWARDS = {
-    'killed':      (-1, +1),
-    'out_of_time': (-5, +5),
-    'time':        ( 0,  0),
-    'treasure':    (+9,  0),  # TODO: should guardians get a negative reward here?
+    'killed':      (-.5, +.5),
+    'out_of_time': (-.5,   0),
+    'time':        (  0,   0),
+    'treasure':    ( +1,  -1),
 }
 
 

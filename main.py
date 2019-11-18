@@ -56,6 +56,8 @@ def main(config_path: str):
                 warnings.simplefilter('ignore')
                 torch.save(policies, checkpoint_path % update_number)
 
+    # TODO log final
+
     # Flush logs
     logs_writer.close()
 
