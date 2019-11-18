@@ -22,6 +22,7 @@ ACTIVATION_FUNCTIONS = {
 
 # TODO use config.num_hidden_layers
 # TODO (?) TransformerController
+# TODO (?) batch normalization, dropout, etc
 
 class RecurrentController(nn.Module):
     def __init__(self, config: Config, env_state_shape: tuple, num_actions: int):
@@ -85,12 +86,15 @@ class FCController(RecurrentController):
 
         activation = ACTIVATION_FUNCTIONS[config.activation_function]
 
+        hidden_layers = [
+            nn.Linear(config.hidden_layer_size, config.hidden_layer_size),
+            activation(),
+        ] * config.num_hidden_layers
         self.base = nn.Sequential(
             nn.Flatten(),
             nn.Linear(num_inputs, config.hidden_layer_size),
             activation(),
-            nn.Linear(config.hidden_layer_size, config.hidden_layer_size),
-            activation(),
+            *hidden_layers
         )
 
         self.actor  = nn.Linear(config.recurrent_layer_size, num_actions)
@@ -106,11 +110,14 @@ class ConvController(RecurrentController):
         activation = ACTIVATION_FUNCTIONS[config.activation_function]
         num_channels, width, height = env_state_shape
 
+        hidden_layers = [
+            nn.Conv2d(config.hidden_layer_size, config.hidden_layer_size, kernel_size=1, stride=1),
+            activation(),
+        ] * config.num_hidden_layers
         self.base = nn.Sequential(
             nn.Conv2d(num_channels, config.hidden_layer_size, kernel_size=1, stride=1),
             activation(),
-            nn.Conv2d(config.hidden_layer_size, config.hidden_layer_size, kernel_size=1, stride=1),
-            activation(),
+            *hidden_layers,
             torch.nn.Flatten(),
         )
 
