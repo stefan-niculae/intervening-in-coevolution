@@ -1,11 +1,14 @@
 {
   "scenario": "3x3-test-2thief-1guardian",
+  "time_limit": 50,
+  "allow_noop": false,
 
-  "algorithm": "ppo",
+  "algorithm": "pg",
   "controller": "fc",
-  "num_recurrent_layers": 1,
+  "num_recurrent_layers": 0,
+  "num_hidden_layers": 1,
 
-  "num_updates": 3,
+  "num_updates": 2,
   "num_transitions": 50,
   "batch_size": 16,
   "num_epochs": 1,

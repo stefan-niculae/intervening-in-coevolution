@@ -8,6 +8,13 @@ class Config:
     # Check environment/scenarios.py for more
     scenario: str = '4x4-thief-treasure'
 
+    # Number of steps after which the guardians win
+    # in each step all alive avatars move once
+    time_limit: int = 30
+
+    # Whether avatars can chose to do nothing for one timestep
+    allow_noop: bool = False
+
     """ Policy """
     # Check agent/policies.py
     algorithm: str = 'pg'  # pg | ppo

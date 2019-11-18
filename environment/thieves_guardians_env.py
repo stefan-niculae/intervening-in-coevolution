@@ -1,6 +1,9 @@
 """ Custom environment """
 import numpy as np
 
+from configs.structure import Config
+
+
 # Map cell states
 THIEF    = 0  # thief must be zero
 GUARDIAN = 1  # guardian must be 1
@@ -13,14 +16,14 @@ UP    = 0
 DOWN  = 1
 LEFT  = 2
 RIGHT = 3
-NOOP  = 4
+NOOP  = 4  # must be last one
 
 ACTION_IDX2SYMBOL = {
     UP:     '⬆️',
     DOWN:   '⬇️',
     LEFT:   '⬅️',
     RIGHT:  '➡️️',
-    NOOP:   '⏸️',
+    NOOP:   'n',
     'dead': '◼️',
 }
 
@@ -50,20 +53,20 @@ class TGEnv:
     An agent controls all avatars on a team,
     (An actor executes the environment)
     """
-    def __init__(self, scenario_name: str):
-        if scenario_name.startswith('random'):
+    def __init__(self, config: Config):
+        self.scenario_name = config.scenario
+        if self.scenario_name.startswith('random'):
             from environment.scenarios import random_scenario_configs
-            scenario = random_scenario_configs[scenario_name[-1]]
+            scenario = random_scenario_configs[self.scenario_name[-1]]
         else:
             from environment.scenarios import generate_fixed_scenario
-            scenario = generate_fixed_scenario(scenario_name)
+            scenario = generate_fixed_scenario(self.scenario_name)
 
-        self.scenario_name = scenario_name
+        self.time_limit = config.time_limit
+
         self._width = scenario.width
         self._height = scenario.height
         self._fixed_original_map = scenario.fixed_map
-
-        self.time_limit = scenario.time_limit
 
         self.id2team = np.array([THIEF] * scenario.n_thieves + [GUARDIAN] * scenario.n_guardians)
         self.num_avatars = scenario.n_thieves + scenario.n_guardians
@@ -72,6 +75,8 @@ class TGEnv:
         # self.state_shape = (5, self._width, self._height)
         self.state_shape = (5, self._width, self._height)
         self.num_actions = len(action_idx2delta)
+        if not config.allow_noop:
+            self.num_actions -= 1  # the last one is NOOP
 
         self._n_thieves = scenario.n_thieves
         self.elapsed_time = None

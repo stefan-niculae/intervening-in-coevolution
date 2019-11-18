@@ -11,7 +11,7 @@ from agent.storage import RolloutStorage
 
 def instantiate(config: Config) -> (TGEnv, List[Policy], List[RolloutStorage]):
     """ Instantiate the environment, agents and storages """
-    env = TGEnv(config.scenario)
+    env = TGEnv(config)
 
     # Each avatar has its own storage (because they do not all die at the same time)
     avatar_storages = [

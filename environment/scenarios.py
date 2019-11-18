@@ -17,7 +17,6 @@ class Scenario:
     n_thieves: int
     n_guardians: int
     wall_density: float
-    time_limit: int
     fixed_map: np.array
 
 
@@ -90,14 +89,12 @@ _fixed_scenario_maps = {
 
 def generate_fixed_scenario(name) -> Scenario:
     map = np.array(_fixed_scenario_maps[name])
-    time_limit = map.shape[0] * map.shape[1] * 2
     return Scenario(
         width=map.shape[0],
         height=map.shape[1],
         n_thieves=np.sum(map == T),
         n_guardians=np.sum(map == G),
         wall_density=(map == W).mean(),
-        time_limit=time_limit,
         fixed_map=map,
     )
 
@@ -109,7 +106,6 @@ random_scenario_configs = {
         n_thieves=1,
         n_guardians=1,
         wall_density=0.,
-        time_limit=50,
         fixed_map=None,
     ),
 
@@ -119,7 +115,6 @@ random_scenario_configs = {
         n_thieves=2,
         n_guardians=2,
         wall_density=.2,
-        time_limit=150,
         fixed_map=None,
     ),
 
@@ -129,7 +124,6 @@ random_scenario_configs = {
         n_thieves=3,
         n_guardians=3,
         wall_density=.4,
-        time_limit=400,
         fixed_map=None,
     )
 }
