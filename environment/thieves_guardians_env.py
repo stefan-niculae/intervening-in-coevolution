@@ -13,13 +13,15 @@ UP    = 0
 DOWN  = 1
 LEFT  = 2
 RIGHT = 3
-# NOOP  = 4
+NOOP  = 4
 
 ACTION_IDX2SYMBOL = {
-    UP: '^',
-    DOWN: 'v',
-    LEFT: '<',
-    RIGHT: '>'
+    UP:     '⬆️',
+    DOWN:   '⬇️',
+    LEFT:   '⬅️',
+    RIGHT:  '➡️️',
+    NOOP:   '⏸️',
+    'dead': '◼️',
 }
 
 action_idx2delta = {
@@ -27,7 +29,7 @@ action_idx2delta = {
     DOWN:  np.array([+1,  0]),
     LEFT:  np.array([ 0, -1]),
     RIGHT: np.array([ 0, +1]),
-    # NOOP:  np.array([ 0,  0]),
+    NOOP:  np.array([ 0,  0]),
 }
 
 
@@ -35,7 +37,7 @@ action_idx2delta = {
 REWARDS = {
     'killed':      (-1, +1),
     'out_of_time': (-5, +5),
-    'time':        (0, 0),
+    'time':        ( 0,  0),
     'treasure':    (+9,  0),  # TODO: should guardians get a negative reward here?
 }
 

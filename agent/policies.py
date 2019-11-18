@@ -14,10 +14,27 @@ class Policy:
     def __init__(self, config: Config, env_state_shape, num_actions):
         pass
 
-    def pick_action(self, env_state, deterministic=False):
+    def pick_action(self, env_state, rec_h, rec_c, deterministic=False):
+        """
+        Args:
+            env_state:     float array of shape env_state_shape
+            rec_h:         float tensor of shape [num_recurrent_layers, 1, recurrent_layer_size]
+            rec_c:         float tensor of shape [num_recurrent_layers, 1, recurrent_layer_size]
+            deterministic: bool -- when True, it always picks the most probable action
+        """
         return None, None
 
-    def update(self, env_states, actions, old_action_log_probs, returns):
+    def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns):
+        """
+        Args:
+            env_states:           float tensor of shape [batch_size, *env_state_shape]
+            rec_hs:               float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
+            rec_cs:               float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
+            actions:              int tensor of shape  [batch_size,]
+            old_action_log_probs: float tensor of shape [batch_size,]
+            returns:              float tensor of shape [batch_size,]
+
+        """
         pass
 
 
@@ -25,13 +42,10 @@ class RandomPolicy(Policy):
     def __init__(self, config: Config, env_state_shape, num_actions):
         self.num_actions = num_actions
 
-    def pick_action(self, env_state, deterministic=False):
+    def pick_action(self, *args):
         action = np.random.randint(self.num_actions)
         log_prob = 0.
         return action, log_prob
-
-    def update(self, *args):
-        pass
 
 
 class LearningPolicy(Policy):
@@ -40,97 +54,95 @@ class LearningPolicy(Policy):
         self.controller = controller_class(config, env_state_shape, num_actions)
         self.entropy_coef = config.entropy_coef
         self.max_grad_norm = config.max_grad_norm
-        self.all_parameters = []
+        self.all_parameters = list(self.controller.parameters())
 
     def _create_optimizer(self, config: Config):
         self.optimizer = torch.optim.Adam(self.all_parameters, lr=config.lr)
         self.lr_decay = torch.optim.lr_scheduler.StepLR(self.optimizer, config.lr_decay_interval, config.lr_decay_factor)
 
-    def pick_action(self, env_state, deterministic=False):
+    def pick_action(self, env_state, rec_h, rec_c, deterministic=False):
         """
-        In the given env_state, pick action either by sampling or most probable one (when deterministic=True)
-
-        Args:
-            env_state: float array of shape env_state_shape
-            deterministic: whether to pick most probable action
+        In the given env_state, pick a single action either by sampling or most probable one (when deterministic=True)
+        Called during rollouts collection to generate the next action, one by one
 
         Returns:
             action: int
             action_log_prob: float
+            rec_h: float tensor of shape [num_recurrent_layers, 1, recurrent_layer_size]
+            rec_c: float tensor of shape [num_recurrent_layers, 1, recurrent_layer_size]
         """
         env_state = torch.tensor(env_state, dtype=torch.float32)
-        env_state = env_state.unsqueeze_(0)  # set a batch size of 1: from [C, W, H] to [1, C, W, H]
 
-        actor_logits = self.controller.actor(env_state)  # float tensor of shape [1, num_actions]
+        # actor_logits: float tensor of shape [batch_size, num_actions]
+        actor_logits, _, h, c = self.controller.forward(
+            # Set dummy batch sizes of 1
+            env_state.view(1, *env_state.shape),
+            rec_h,
+            rec_c,
+        )
+
         action_distributions = Categorical(logits=actor_logits)  # float tensor of shape [1, num_actions]
-
         if deterministic:  # pick most probable
             action = action_distributions.probs.argmax()
         else:
             action = action_distributions.sample()
-
         action_log_probs = action_distributions.log_prob(action)
-        return action.item(), action_log_probs.item()
 
-    def _evaluate_actions(self, env_states, actions):
+        return (
+            action.item(),
+            action_log_probs.item(),
+            h,
+            c,
+        )
+
+    def _evaluate_actions(self, env_states, rec_hs, rec_cs, actions):
         """
         See how likely these actions (using the current model) in the given env_states
+        Called when updating, on batches of transitions
 
         Args:
             env_states: float tensor of shape [batch_size, *env_state_shape]
+            rec_hs:     float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
+            rec_cs:     float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
             actions:    int tensor of shape  [batch_size,]
 
         Returns:
             action_log_probs: float tensor of shape [batch_size,]
             entropy:          float tensor of shape [batch_size,]
+            values:           float tensor of shape [batch_size,]
         """
-        actor_logits = self.controller.actor(env_states)  # float tensor of shape [batch_size, num_actions]
+        # actor_logits: float tensor of shape [batch_size, num_actions]
+        # values: float tensor of shape [batch_size,1]
+        actor_logits, values, _, _ = self.controller.forward(env_states, rec_hs, rec_cs)
         action_distributions = Categorical(logits=actor_logits)  # float tensor of shape [batch_size, num_actions]
 
         action_log_probs = action_distributions.log_prob(actions)  # float tensor of shape [batch_size,]
         entropy = action_distributions.entropy()  # float tensor of shape [batch_size,]
 
-        return action_log_probs, entropy
+        return action_log_probs, entropy, values
 
     def _optimize(self, loss):
         self.optimizer.zero_grad()
-        loss.backward(retain_graph=False)
+        loss.backward(retain_graph=True)  # retain_graph=True so that backward passes thorugh the same hidden recurrent states work
         nn.utils.clip_grad_norm_(self.all_parameters, self.max_grad_norm)
         self.optimizer.step()
         self.lr_decay.step(None)
-
-    def update(self, env_states, actions, old_action_log_probs, returns):
-        """
-        Args:
-            env_states:           float tensor of shape [batch_size, *env_state_shape]
-            actions:              int tensor of shape  [batch_size,]
-            old_action_log_probs: float tensor of shape [batch_size,]
-            returns:              float tensor of shape [batch_size,]
-        """
-        raise NotImplemented
 
 
 class PG(LearningPolicy):
     """ Policy Gradient - single actor """
     def __init__(self, config: Config, env_state_shape, num_actions):
         super().__init__(config, env_state_shape, num_actions)
-        self.all_parameters += list(self.controller.actor.parameters())
         self._create_optimizer(config)
 
-    def update(self, env_states, actions, old_action_log_probs, returns) -> {str: float}:
+    def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns) -> {str: float}:
         """
         Increase the probability of actions that give high returns
-
-        Args:
-            env_states:           float tensor of shape [batch_size, *env_state_shape]
-            actions:              int tensor of shape  [batch_size,]
-            old_action_log_probs: float tensor of shape [batch_size,]
-            returns:              float tensor of shape [batch_size,]
 
         Returns:
             {name : loss}
         """
-        action_log_probs, entropy = self._evaluate_actions(env_states, actions)
+        action_log_probs, entropy = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
 
         policy_loss = -(action_log_probs * returns).mean()
         entropy_loss = -entropy.mean()
@@ -147,28 +159,20 @@ class PPO(PG):
     """ Proximal Policy Optimization — actor and critic with max bound on update """
     def __init__(self, config: Config, env_state_shape, num_actions):
         super().__init__(config, env_state_shape, num_actions)
-        self.all_parameters += list(self.controller.critic.parameters())
         self._create_optimizer(config)
         self.clip_param = config.ppo_clip
         self.critic_coef = config.critic_coef
 
-    def update(self, env_states, actions, old_action_log_probs, returns) -> {str: float}:
+    def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns) -> {str: float}:
         """
         Increase the probability of actions that give high advantages
         and move predicted values towards observed returns
 
-        Args:
-            env_states:           float tensor of shape [batch_size, *env_state_shape]
-            actions:              int tensor of shape  [batch_size,]
-            old_action_log_probs: float tensor of shape [batch_size,]
-            returns:              float tensor of shape [batch_size,]
-
         Returns:
             {name : loss}
         """
-        action_log_probs, entropy = self._evaluate_actions(env_states, actions)
+        action_log_probs, entropy, values = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
 
-        values = self.controller.critic(env_states)
         advantage = returns - values.detach()
 
         ratio = torch.exp(action_log_probs - old_action_log_probs.detach())
