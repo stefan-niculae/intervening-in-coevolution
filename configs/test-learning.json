@@ -1,25 +1,27 @@
 {
-  "scenario": "4x4-thief-treasure",
+  "scenario": "6x6-2xthief-2xguardian",
 
-  "algorithm": "pg",
+  "algorithm": "ppo",
   "controller": "fc",
 
   "hidden_layer_size": 32,
+  "num_hidden_layers": 2,
   "activation_function": "tanh",
+  "num_recurrent_layers": 0,
+
+  "num_updates": 30,
+  "num_transitions": 5000,
+  "batch_size": 512,
+  "num_epochs": 4,
 
   "lr": 0.005,
-  "lr_decay_interval": 50,
-  "lr_decay_factor": 0.5,
+  "lr_decay_interval": 10,
+  "lr_decay_factor": 0.1,
   "entropy_coef": 0.001,
   "discount": 0.99,
 
-  "num_updates": 100,
-  "num_transitions": 5000,
-  "num_batches": 5,
-  "num_epochs": 5,
-
   "log_interval": 1,
-  "eval_interval": 2,
+  "eval_interval": 3,
   "save_interval": 0,
 
   "seed": 0

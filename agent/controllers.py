@@ -133,8 +133,9 @@ class ConvController(RecurrentController):
             torch.nn.Flatten(),
         )
 
-        self.actor  = nn.Linear(width * height * self.actor_critic_inp_dim, num_actions)
-        self.critic = nn.Linear(self.actor_critic_inp_dim, 1),
+        dim = width * height * self.actor_critic_inp_dim
+        self.actor  = nn.Linear(dim, num_actions)
+        self.critic = nn.Linear(dim, 1)
 
         self.train()  # set module in training mode
 
