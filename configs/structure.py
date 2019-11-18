@@ -31,9 +31,9 @@ class Config:
     entropy_coef_decay_factor: float = .1
 
     # Force exploration
-    exploration_proba: float = .9
-    exploration_proba_decay_interval: int = 10
-    exploration_proba_decay_factor: float = .1
+    explore_proba: float = .9
+    explore_proba_decay_interval: int = 10
+    explore_proba_decay_factor: float = .1
 
     """ Controller """
     # Controller architecture — check agent/controllers.py
@@ -58,7 +58,7 @@ class Config:
     num_random_updates: int = 3
 
     # Number of model updates
-    num_unguided_updates: int = 100
+    num_updates: int = 100
 
     # Gather this many transitions before running a model update
     num_transitions: int = 1000

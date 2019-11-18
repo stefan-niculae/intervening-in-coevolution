@@ -32,16 +32,20 @@ def log_descriptive_statistics(array: np.array, prefix: str, writer, update_numb
         )
 
 
-def log_scalars(training_history: (np.array, np.array, np.array, [str], [dict]), writer: SummaryWriter, update_number: int):
+def log_scalars(training_history: (np.array, np.array, np.array, [str], [dict], dict), writer: SummaryWriter, update_number: int):
     (
         avatar_total_reward,
         avatar_steps_alive,
         avatar_first_probas,
         episode_end_reasons,
         team_losses_history,
-    )= training_history
+        update_guidance_status,
+    ) = training_history
 
     num_avatars = avatar_total_reward.shape[1]
+
+    for var, value in update_guidance_status.items():
+        writer.add_scalar(f'guidance/{var}', value, update_number)
 
     for name, array in [('total-episode-reward', avatar_total_reward), ('episode-steps-alive', avatar_steps_alive)]:
         for avatar_id in range(num_avatars):

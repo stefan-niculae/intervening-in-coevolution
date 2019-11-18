@@ -165,7 +165,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
         storage.reset()
 
     for policy in team_policies:
-        policy.end_of_update()
+        guidance_status = policy.end_of_update()
 
     # Ignore last episode since it's most likely unfinished
     return (
@@ -174,4 +174,5 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
         first_step_probas.final_history(drop_last=False),
         end_reasons,
         losses_history,
+        guidance_status,
     )

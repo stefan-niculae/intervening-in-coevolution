@@ -18,9 +18,9 @@ class Policy:
         self.entropy_coef_decay_interval = config.entropy_coef_decay_interval
         self.entropy_coef_decay_factor = config.entropy_coef_decay_factor
 
-        self.exploration_proba = config.exploration_proba
-        self.exploration_proba_decay_interval = config.exploration_proba_decay_interval
-        self.exploration_proba_decay_factor = config.exploration_proba_decay_factor
+        self.explore_proba = config.explore_proba
+        self.explore_proba_decay_interval = config.explore_proba_decay_interval
+        self.explore_proba_decay_factor = config.explore_proba_decay_factor
 
         self.update_number = 0
 
@@ -68,7 +68,7 @@ class Policy:
         else:
             most_likely = action_distributions.probs.argmax()
             # Explore uniformly (but not the most probable action)
-            if np.random.rand() < self.exploration_proba:
+            if np.random.rand() < self.explore_proba:
                 probas = self.one_fewer_action_probas.copy()
                 probas[most_likely.item()] = 0
                 action = np.random.choice(self.num_actions, p=probas)
@@ -139,9 +139,14 @@ class Policy:
         self.update_number += 1
         if self.update_number % self.entropy_coef_decay_interval == 0:
             self.entropy_coef *= self.entropy_coef_decay_factor
-        if self.update_number % self.exploration_proba_decay_interval == 0:
-            self.exploration_proba *= self.exploration_proba_decay_factor
-        # TODO log these changing things
+        if self.update_number % self.explore_proba_decay_interval == 0:
+            self.explore_proba *= self.explore_proba_decay_factor
+
+        return {
+            'lr': self.optimizer.param_groups[0]['lr'],
+            'entropy_coef': self.entropy_coef,
+            'explore_proba': self.explore_proba,
+        }
 
 
 class PG(Policy):

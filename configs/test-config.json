@@ -8,7 +8,7 @@
   "num_recurrent_layers": 0,
   "num_hidden_layers": 1,
 
-  "num_unguided_updates": 10,
+  "num_updates": 10,
   "num_transitions": 100,
   "batch_size": 16,
   "num_epochs": 1,
@@ -17,9 +17,9 @@
   "entropy_coef_decay_interval": 2,
   "entropy_coef_decay_factor": 0.1,
 
-  "exploration_proba": 0.9,
-  "exploration_proba_decay_interval": 2,
-  "exploration_proba_decay_factor": 0.1,
+  "explore_proba": 0.9,
+  "explore_proba_decay_interval": 2,
+  "explore_proba_decay_factor": 0.1,
 
   "log_interval": 1,
   "eval_interval": 0,
