@@ -14,17 +14,18 @@ class RolloutStorage:
 
         self.num_recurrent_layers = config.num_recurrent_layers
         self.recurrent_layer_size = config.recurrent_layer_size
+        self.controller_recurrent = config.num_recurrent_layers > 0  # assumes homogenous controllers
 
-        # TODO look into torch storage?
         self.env_states       = torch.empty(config.num_transitions, *env_state_shape, dtype=torch.float32,  requires_grad=False)
         self.actions          = torch.empty(config.num_transitions,                   dtype=torch.float32,  requires_grad=False)  # float32 so it can be filled with nan
         self.action_log_probs = torch.empty(config.num_transitions,                   dtype=torch.float32,  requires_grad=False)
         self.rewards          = torch.empty(config.num_transitions,                   dtype=torch.float32,  requires_grad=False)
         self.dones            = torch.empty(config.num_transitions,                   dtype=torch.float32,  requires_grad=False)  # has to be non-boolean to allow multiplication
         self.returns          = torch.empty(config.num_transitions + 1,               dtype=torch.float32,  requires_grad=False)
-        # This is the way torch expects hidden state: [num_recurrent_layers, batch_size, recurrent_size]
-        self.rec_hs           = torch.empty(config.num_recurrent_layers, config.num_transitions, config.recurrent_layer_size, dtype=torch.float32)
-        self.rec_cs           = torch.empty(config.num_recurrent_layers, config.num_transitions, config.recurrent_layer_size, dtype=torch.float32)
+        if self.controller_recurrent:
+            # This is the way torch expects hidden state: [num_recurrent_layers, batch_size, recurrent_size]
+            self.rec_hs       = torch.empty(config.num_recurrent_layers, config.num_transitions, config.recurrent_layer_size, dtype=torch.float32)
+            self.rec_cs       = torch.empty(config.num_recurrent_layers, config.num_transitions, config.recurrent_layer_size, dtype=torch.float32)
 
         self.step = None
         self.last_done = None
@@ -48,8 +49,9 @@ class RolloutStorage:
         self.action_log_probs[self.step] = torch.tensor(action_log_prob, dtype=torch.float32)
         self.rewards         [self.step] = torch.tensor(reward,          dtype=torch.float32)
         self.dones           [self.step] = torch.tensor(done,            dtype=torch.float32)
-        self.rec_hs          [:, self.step] = rec_h.view(self.num_recurrent_layers, self.recurrent_layer_size)
-        self.rec_cs          [:, self.step] = rec_c.view(self.num_recurrent_layers, self.recurrent_layer_size)
+        if self.controller_recurrent:
+            self.rec_hs      [:, self.step] = rec_h.view(self.num_recurrent_layers, self.recurrent_layer_size)
+            self.rec_cs      [:, self.step] = rec_c.view(self.num_recurrent_layers, self.recurrent_layer_size)
 
         self.step += 1
 
@@ -57,7 +59,12 @@ class RolloutStorage:
         """ Clear out (set to nan so we can avoid if they are used before being filled) the current tensors and reset step """
         self.step = 0
         self.last_done = None
-        for tensor in [self.env_states, self.actions, self.action_log_probs, self.rewards, self.dones, self.returns, self.rec_hs, self.rec_cs]:
+
+        to_reset = [self.env_states, self.actions, self.action_log_probs, self.rewards, self.dones, self.returns]
+        if self.controller_recurrent:
+            to_reset += [self.rec_hs, self.rec_cs]
+        for tensor in to_reset:
+            # Set to NaN to be able to detect if wrong elements are sampled
             tensor[:] = np.nan
 
     def compute_returns(self):
@@ -81,7 +88,9 @@ class RolloutStorage:
             action_log_probs: float tensor of shape [batch_size,]
             returns:          float tensor of shape [batch_size,]
             rec_hs:           float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
+                or None if the controller is not recurrent
             rec_cs:           float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
+                or None if the controller is not recurrent
         """
         sampler = BatchSampler(
             SubsetRandomSampler(range(self.last_done + 1)),
@@ -89,10 +98,16 @@ class RolloutStorage:
             drop_last=True)
 
         for indices in sampler:
+            if self.controller_recurrent:
+                rec_hs = self.rec_hs[:, indices]
+                rec_cs = self.rec_cs[:, indices]
+            else:
+                rec_hs = None
+                rec_cs = None
             yield (
                 self.env_states[indices],
-                self.rec_hs[:, indices],
-                self.rec_cs[:, indices],
+                rec_hs,
+                rec_cs,
                 self.actions[indices],
                 self.action_log_probs[indices],
                 self.returns[indices],

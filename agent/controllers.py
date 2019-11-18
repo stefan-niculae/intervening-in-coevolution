@@ -20,7 +20,6 @@ ACTIVATION_FUNCTIONS = {
 }
 
 
-# TODO use config.num_hidden_layers
 # TODO (?) TransformerController
 # TODO (?) batch normalization, dropout, etc
 
@@ -29,20 +28,27 @@ class RecurrentController(nn.Module):
         super().__init__()
         self.hidden_layer_size    = config.hidden_layer_size
         self.recurrent_layer_size = config.recurrent_layer_size
+        self.is_recurrent         = config.num_recurrent_layers > 0
 
-        self.recurrent = nn.LSTM(
-            input_size=config.hidden_layer_size,  # number of features
-            hidden_size=config.recurrent_layer_size,
-            num_layers=config.num_recurrent_layers,
-            bias=True,
-            batch_first=True,  # expects shape [batch_size, num_timesteps, num_features], we always simulate on num_timesteps=1
-            dropout=0.,
-            bidirectional=False,
-        )
+        if self.is_recurrent:
+            self.actor_critic_inp_dim = config.recurrent_layer_size
+            self.recurrent = nn.LSTM(
+                input_size=config.hidden_layer_size,  # number of features
+                hidden_size=config.recurrent_layer_size,
+                num_layers=config.num_recurrent_layers,
+                bias=True,
+                batch_first=True,  # expects shape [batch_size, num_timesteps, num_features], we always simulate on num_timesteps=1
+                dropout=0.,
+                bidirectional=False,
+            )
 
-        batch_size = 1  # when collecting rollouts, we pick transitions one by one
-        self.rec_h0 = torch.randn(config.num_recurrent_layers, batch_size, config.recurrent_layer_size, requires_grad=True)
-        self.rec_c0 = torch.randn(config.num_recurrent_layers, batch_size, config.recurrent_layer_size, requires_grad=True)
+            batch_size = 1  # when collecting rollouts, we pick transitions one by one
+            self.rec_h0 = torch.randn(config.num_recurrent_layers, batch_size, config.recurrent_layer_size, requires_grad=True)
+            self.rec_c0 = torch.randn(config.num_recurrent_layers, batch_size, config.recurrent_layer_size, requires_grad=True)
+
+        else:
+            # If the recurrent layer(s) are missing, we input directly from the base
+            self.actor_critic_inp_dim = config.hidden_layer_size
 
     def forward(self, env_states, rec_h_inp, rec_c_inp):
         """
@@ -60,17 +66,23 @@ class RecurrentController(nn.Module):
             rec_c_out: float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
         """
         base_out = self.base(env_states)  # shape: [batch_size, hidden_size]
-        batch_size = env_states.size(0)
 
-        rec_out, (rec_h_out, rec_c_out) = self.recurrent(
-            # Add an extra dummy timestep dimension as 1
-            base_out.view(batch_size, 1, self.hidden_layer_size),
-            (rec_h_inp, rec_c_inp)
-        )
+        if self.is_recurrent:
+            batch_size = env_states.size(0)
+            rec_out, (rec_h_out, rec_c_out) = self.recurrent(
+                # Add an extra dummy timestep dimension as 1
+                base_out.view(batch_size, 1, self.hidden_layer_size),
+                (rec_h_inp, rec_c_inp)
+            )
+            # Undo the dummy timestep of 1
+            actor_critic_inp = rec_out.view(batch_size, self.recurrent_layer_size)
+        else:
+            actor_critic_inp = base_out
+            rec_h_out = None
+            rec_c_out = None
 
-        # Undo the dummy timestep of 1
-        actor_logits = self.actor (rec_out.view(batch_size, self.recurrent_layer_size))
-        state_values = self.critic(rec_out.view(batch_size, self.recurrent_layer_size))
+        actor_logits = self.actor (actor_critic_inp)
+        state_values = self.critic(actor_critic_inp)
 
         return actor_logits, state_values, rec_h_out, rec_c_out
 
@@ -97,8 +109,8 @@ class FCController(RecurrentController):
             *hidden_layers
         )
 
-        self.actor  = nn.Linear(config.recurrent_layer_size, num_actions)
-        self.critic = nn.Linear(config.recurrent_layer_size, 1)
+        self.actor  = nn.Linear(self.actor_critic_inp_dim, num_actions)
+        self.critic = nn.Linear(self.actor_critic_inp_dim, 1)
 
         self.train()  # set module in training mode
 
@@ -121,8 +133,8 @@ class ConvController(RecurrentController):
             torch.nn.Flatten(),
         )
 
-        self.actor  = nn.Linear(width * height * config.hidden_layer_size, num_actions)
-        self.critic = nn.Linear(config.hidden_layer_size, 1),
+        self.actor  = nn.Linear(width * height * self.actor_critic_inp_dim, num_actions)
+        self.critic = nn.Linear(self.actor_critic_inp_dim, 1),
 
         self.train()  # set module in training mode
 

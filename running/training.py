@@ -54,7 +54,7 @@ def _get_initial_recurrent_state(avatar_policies):
     rec_hs = [None] * len(avatar_policies)
     rec_cs = [None] * len(avatar_policies)
     for i, policy in enumerate(avatar_policies):
-        if isinstance(policy, LearningPolicy):
+        if isinstance(policy, LearningPolicy) and policy.controller.is_recurrent:
             rec_hs[i] = policy.controller.rec_h0
             rec_cs[i] = policy.controller.rec_c0
     return rec_hs, rec_cs
