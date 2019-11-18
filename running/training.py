@@ -79,6 +79,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     # Always start with a fresh env
     env_states = env.reset()  # shape: [num_avatars, *env_state_shape]
     rec_hs, rec_cs = _get_initial_recurrent_state(avatar_policies)
+    next_rec_hs, next_rec_cs = rec_hs, rec_cs
 
     # Collect rollouts
     # TODO (?): collect in parallel
@@ -96,8 +97,8 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                 (
                     actions[avatar_id],
                     action_log_probs[avatar_id],
-                    rec_hs[avatar_id],
-                    rec_cs[avatar_id],
+                    next_rec_hs[avatar_id],
+                    next_rec_cs[avatar_id],
                 ) = policy.pick_action(
                     env_states[avatar_id],
                     rec_hs[avatar_id],
@@ -105,7 +106,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                 )
 
         # Step the environment with one action for each avatar
-        env_states, rewards, dones, infos = env.step(actions)
+        next_env_states, rewards, dones, infos = env.step(actions)
         # TODO log infos
 
         # Insert transitions for alive avatars
@@ -131,6 +132,13 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
             rec_hs, rec_cs = _get_initial_recurrent_state(avatar_policies)
             total_rewards.episode_over()
             steps_alive  .episode_over()
+
+        # The states were not immediately overwritten because we store the state that was used to generate (env_states)
+        # the action for the current time-step, not the one we arrive in (next_env_states)
+        else:
+            env_states = next_env_states
+            rec_hs = next_rec_hs
+            rec_cs = next_rec_cs
 
     # Compute returns for all storages
     for storage in avatar_storages:
