@@ -84,7 +84,7 @@ class RolloutStorage:
             rec_cs:           float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
         """
         sampler = BatchSampler(
-            SubsetRandomSampler(range(self.last_done)),
+            SubsetRandomSampler(range(self.last_done + 1)),
             self.batch_size,
             drop_last=True)
 
