@@ -199,10 +199,10 @@ class TGEnv:
             # A thief managed to reach the treasure, the game is over, punish all guardians
             if avatar_team == THIEF and new_pos_type == TREASURE:
                 done[:] = True
-                info['end_reason'] = f'A thief (id={avatar_id}) reached the treasure'
+                info['end_reason'] = f'Treasure reached'
 
                 thief_reward, guardian_reward = REWARDS['treasure']
-                #thief_reward *= 5 / self.elapsed_time  # TODO debug/generalize
+                #thief_reward *= 5 / self.elapsed_time  # TODO generalize
                 reward[avatar_id] += thief_reward
 
                 # Punish all guardians

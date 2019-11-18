@@ -36,14 +36,25 @@ def log_descriptive_statistics(array: np.array, prefix: str, writer, update_numb
         )
 
 
-def log_scalars(training_history: (np.array, np.array, np.array, [dict]), writer: SummaryWriter, update_number: int):
-    avatar_total_reward, avatar_steps_alive, avatar_first_probas, team_losses_history = training_history
+def log_scalars(training_history: (np.array, np.array, np.array, [str], [dict]), writer: SummaryWriter, update_number: int):
+    (
+        avatar_total_reward,
+        avatar_steps_alive,
+        avatar_first_probas,
+        episode_end_reasons,
+        team_losses_history,
+    )= training_history
 
     num_avatars = avatar_total_reward.shape[1]
 
     for name, array in [('total-episode-reward', avatar_total_reward), ('episode-steps-alive', avatar_steps_alive)]:
         for avatar_id in range(num_avatars):
             log_descriptive_statistics(array[:, avatar_id], f'{name}/avatar-{avatar_id}/', writer, update_number)
+
+    num_episodes = len(episode_end_reasons)
+    for reason in set(episode_end_reasons):
+        percentage_of_episodes = episode_end_reasons.count(reason) / num_episodes
+        writer.add_scalar(f'end-reason-per/{reason}', percentage_of_episodes, update_number)
 
     for avatar_id, probas in enumerate(avatar_first_probas.mean(axis=0)):
         writer.add_histogram(f'first-env-state-action-probas/avatar-{avatar_id}', probas, update_number)

@@ -1,7 +1,6 @@
 """ Routing avatars to storages and policies  """
 
 from typing import List
-import numpy as np
 
 from configs.structure import Config
 from environment.thieves_guardians_env import TGEnv
@@ -58,6 +57,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     total_rewards     = EpisodeAccumulator(env.num_avatars)
     steps_alive       = EpisodeAccumulator(env.num_avatars)
     first_step_probas = EpisodeAccumulator(env.num_avatars, env.num_actions)
+    end_reasons = []
 
     # Will be filled in for each avatar when stepping the environment individually
     actions          = [0] * env.num_avatars
@@ -103,8 +103,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                     first_step_probas.current[avatar_id] = softmax(actor_logits.detach().numpy().flatten())
 
         # Step the environment with one action for each avatar
-        next_env_states, rewards, dones, infos = env.step(actions)
-        # TODO log infos
+        next_env_states, rewards, dones, info = env.step(actions)
 
         # Insert transitions for alive avatars
         for avatar_id in range(env.num_avatars):
@@ -127,9 +126,11 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
         if all(dones):
             env_states = env.reset()
             rec_hs, rec_cs = _get_initial_recurrent_state(avatar_policies)
+
             total_rewards    .episode_over()
             steps_alive      .episode_over()
             first_step_probas.episode_over()
+            end_reasons.append(info['end_reason'])
             first_episode_step = True
 
         # The states were not immediately overwritten because we store the state that was used to generate (env_states)
@@ -138,6 +139,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
             env_states = next_env_states
             rec_hs = next_rec_hs
             rec_cs = next_rec_cs
+
             first_episode_step = False
 
     # Compute returns for all storages
@@ -167,5 +169,6 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
         total_rewards.final_history(drop_last=True),
         steps_alive.final_history(drop_last=True),
         first_step_probas.final_history(drop_last=False),
+        end_reasons,
         losses_history,
     )

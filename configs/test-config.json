@@ -1,6 +1,6 @@
 {
   "scenario": "3x3-test-2thief-1guardian",
-  "time_limit": 5,
+  "time_limit": 10,
   "allow_noop": false,
 
   "algorithm": "pg",
@@ -8,12 +8,12 @@
   "num_recurrent_layers": 0,
   "num_hidden_layers": 1,
 
-  "num_updates": 3,
-  "num_transitions": 50,
+  "num_updates": 10,
+  "num_transitions": 100,
   "batch_size": 16,
   "num_epochs": 1,
 
   "log_interval": 1,
-  "eval_interval": 1,
+  "eval_interval": 0,
   "save_interval": 0
 }
