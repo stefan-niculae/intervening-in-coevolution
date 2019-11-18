@@ -29,11 +29,13 @@ class RecurrentController(nn.Module):
         self.hidden_layer_size    = config.hidden_layer_size
         self.recurrent_layer_size = config.recurrent_layer_size
         self.is_recurrent         = config.num_recurrent_layers > 0
+        self.base_out_dim = None
 
+    def _build_recurrent(self, config: Config):
         if self.is_recurrent:
-            self.actor_critic_inp_dim = config.recurrent_layer_size
+            actor_critic_inp_dim = config.recurrent_layer_size
             self.recurrent = nn.LSTM(
-                input_size=config.hidden_layer_size,  # number of features
+                input_size=self.base_out_dim,  # number of features
                 hidden_size=config.recurrent_layer_size,
                 num_layers=config.num_recurrent_layers,
                 bias=True,
@@ -48,7 +50,9 @@ class RecurrentController(nn.Module):
 
         else:
             # If the recurrent layer(s) are missing, we input directly from the base
-            self.actor_critic_inp_dim = config.hidden_layer_size
+            actor_critic_inp_dim = self.base_out_dim
+
+        return actor_critic_inp_dim
 
     def forward(self, env_states, rec_h_inp, rec_c_inp):
         """
@@ -71,7 +75,7 @@ class RecurrentController(nn.Module):
             batch_size = env_states.size(0)
             rec_out, (rec_h_out, rec_c_out) = self.recurrent(
                 # Add an extra dummy timestep dimension as 1
-                base_out.view(batch_size, 1, self.hidden_layer_size),
+                base_out.view(batch_size, 1, self.base_out_dim),
                 (rec_h_inp, rec_c_inp)
             )
             # Undo the dummy timestep of 1
@@ -109,8 +113,11 @@ class FCController(RecurrentController):
             *hidden_layers
         )
 
-        self.actor  = nn.Linear(self.actor_critic_inp_dim, num_actions)
-        self.critic = nn.Linear(self.actor_critic_inp_dim, 1)
+        self.base_out_dim = config.hidden_layer_size
+        actor_critic_inp_dim = self._build_recurrent(config)
+
+        self.actor  = nn.Linear(actor_critic_inp_dim, num_actions)
+        self.critic = nn.Linear(actor_critic_inp_dim, 1)
 
         self.train()  # set module in training mode
 
@@ -133,9 +140,11 @@ class ConvController(RecurrentController):
             torch.nn.Flatten(),
         )
 
-        dim = width * height * self.actor_critic_inp_dim
-        self.actor  = nn.Linear(dim, num_actions)
-        self.critic = nn.Linear(dim, 1)
+        self.base_out_dim = width * height * config.hidden_layer_size
+        actor_critic_inp_dim = self._build_recurrent(config)
+
+        self.actor  = nn.Linear(actor_critic_inp_dim, num_actions)
+        self.critic = nn.Linear(actor_critic_inp_dim, 1)
 
         self.train()  # set module in training mode
 

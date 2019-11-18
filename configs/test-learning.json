@@ -2,19 +2,20 @@
   "scenario": "6x6-2xthief-2xguardian",
 
   "algorithm": "ppo",
-  "controller": "fc",
+  "controller": "conv",
 
   "hidden_layer_size": 32,
   "num_hidden_layers": 2,
   "activation_function": "tanh",
-  "num_recurrent_layers": 0,
+  "num_recurrent_layers": 1,
+  "recurrent_layer_size": 32,
 
   "num_updates": 30,
-  "num_transitions": 5000,
-  "batch_size": 512,
+  "num_transitions": 2000,
+  "batch_size": 256,
   "num_epochs": 4,
 
-  "lr": 0.005,
+  "lr": 0.01,
   "lr_decay_interval": 10,
   "lr_decay_factor": 0.1,
   "entropy_coef": 0.001,
