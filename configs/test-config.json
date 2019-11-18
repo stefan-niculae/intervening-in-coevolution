@@ -3,14 +3,14 @@
 
   "algorithm": "ppo",
   "controller": "fc",
-  "num_recurrent_layers": 5,
+  "num_recurrent_layers": 1,
 
-  "num_updates": 10,
-  "num_transitions": 100,
-  "batch_size": 45,
-  "num_epochs": 2,
+  "num_updates": 3,
+  "num_transitions": 50,
+  "batch_size": 16,
+  "num_epochs": 1,
 
-  "eval_interval": 0,
-  "log_interval": 0,
+  "log_interval": 1,
+  "eval_interval": 1,
   "save_interval": 0
 }
