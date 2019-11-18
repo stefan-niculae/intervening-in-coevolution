@@ -70,7 +70,7 @@ def save_code(save_path: str):
 class EpisodeAccumulator:
     def __init__(self, *shape):
         self.history = []
-        self.current = np.zeros(*shape)
+        self.current = np.zeros(shape)
 
     def episode_over(self):
         self.history.append(self.current.copy())
@@ -82,3 +82,8 @@ class EpisodeAccumulator:
             return history[:-1]
         else:
             return history
+
+
+def softmax(x: np.array) -> np.array:
+    x = np.exp(x - min(x))
+    return x / sum(x)

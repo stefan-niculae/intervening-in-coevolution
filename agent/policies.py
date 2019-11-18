@@ -68,6 +68,7 @@ class LearningPolicy(Policy):
         Returns:
             action: int
             action_log_prob: float
+            actor_logits: float tensor of shape [num_actions,]
             rec_h: float tensor of shape [num_recurrent_layers, 1, recurrent_layer_size]
             rec_c: float tensor of shape [num_recurrent_layers, 1, recurrent_layer_size]
         """
@@ -91,6 +92,7 @@ class LearningPolicy(Policy):
         return (
             action.item(),
             action_log_probs.item(),
+            actor_logits,
             h,
             c,
         )

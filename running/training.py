@@ -7,7 +7,7 @@ from configs.structure import Config
 from environment.thieves_guardians_env import TGEnv
 from agent.policies import POLICY_CLASSES, Policy, LearningPolicy
 from agent.storage import RolloutStorage
-from running.utils import EpisodeAccumulator
+from running.utils import EpisodeAccumulator, softmax
 
 
 def instantiate(config: Config) -> (TGEnv, List[Policy], List[RolloutStorage]):
@@ -57,7 +57,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     # Used to log
     total_rewards     = EpisodeAccumulator(env.num_avatars)
     steps_alive       = EpisodeAccumulator(env.num_avatars)
-    first_step_probas = EpisodeAccumulator(env.num_teams, env.num_actions)
+    first_step_probas = EpisodeAccumulator(env.num_avatars, env.num_actions)
 
     # Will be filled in for each avatar when stepping the environment individually
     actions          = [0] * env.num_avatars
@@ -90,6 +90,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                 (
                     actions[avatar_id],
                     action_log_probs[avatar_id],
+                    actor_logits,
                     next_rec_hs[avatar_id],
                     next_rec_cs[avatar_id],
                 ) = policy.pick_action(
@@ -98,8 +99,8 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                     rec_cs[avatar_id],
                 )
 
-                if first_episode_step:
-                    first_step_probas.current[team] = np.exp(action_log_probs)
+                if first_episode_step and isinstance(policy, LearningPolicy):
+                    first_step_probas.current[avatar_id] = softmax(actor_logits.detach().numpy().flatten())
 
         # Step the environment with one action for each avatar
         next_env_states, rewards, dones, infos = env.step(actions)

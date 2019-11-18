@@ -3,7 +3,7 @@ import numpy as np
 from typing import List
 from copy import copy
 
-from environment.thieves_guardians_env import TGEnv, ACTION_IDX2SYMBOL, NOOP
+from environment.thieves_guardians_env import TGEnv, ACTION_IDX2SYMBOL, DEAD
 from agent.policies import Policy
 from running.training import _get_initial_recurrent_state
 
@@ -45,6 +45,7 @@ def evaluate(env: TGEnv, team_policies: List[Policy], deterministic: bool):
                 (
                     actions[avatar_id],
                     action_log_probs[avatar_id],
+                    _,
                     rec_hs[avatar_id],
                     rec_cs[avatar_id],
                 ) = policy.pick_action(

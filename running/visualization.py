@@ -37,7 +37,7 @@ def log_descriptive_statistics(array: np.array, prefix: str, writer, update_numb
 
 
 def log_scalars(training_history: (np.array, np.array, np.array, [dict]), writer: SummaryWriter, update_number: int):
-    avatar_total_reward, avatar_steps_alive, team_first_probas, team_losses_history = training_history
+    avatar_total_reward, avatar_steps_alive, avatar_first_probas, team_losses_history = training_history
 
     num_avatars = avatar_total_reward.shape[1]
 
@@ -45,8 +45,8 @@ def log_scalars(training_history: (np.array, np.array, np.array, [dict]), writer
         for avatar_id in range(num_avatars):
             log_descriptive_statistics(array[:, avatar_id], f'{name}/avatar-{avatar_id}/', writer, update_number)
 
-    for team, probas in enumerate(team_first_probas):
-        writer.add_histogram(f'first-env-state-action-probas/{TEAM_NAMES[team]}', probas, update_number)
+    for avatar_id, probas in enumerate(avatar_first_probas.mean(axis=0)):
+        writer.add_histogram(f'first-env-state-action-probas/avatar-{avatar_id}', probas, update_number)
 
     for team, tlh in enumerate(team_losses_history):
         # Random policies don't have losses to log
