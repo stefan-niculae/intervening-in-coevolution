@@ -63,6 +63,6 @@ def evaluate(env: TGEnv, team_policies: List[Policy]):
     map_history    .append(env._map.copy())
     pos2id_history .append(copy(env._pos2id))
     rewards_history.append(cumulative_reward.copy())
-    actions_history.append(['-'] * env.num_avatars)
+    actions_history.append([ACTION_IDX2SYMBOL['dead']] * env.num_avatars)
 
     return map_history, pos2id_history, rewards_history, actions_history

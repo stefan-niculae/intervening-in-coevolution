@@ -38,9 +38,12 @@ DPI = 80
 def plot_instance(args: tuple):
     ax, cmap, norm, step, map, pos2id, reward, action = args
 
+    reward_display = '   '.join(f'{r:3.2f}' for r in reward)
+    action_display = '  '.join(action)
     ax.set_title(f'Step {step}\n'
-                 f'Cumulative rewards: {reward}\n'
-                 f'Action: {action}')
+                 f'Cumulative rewards: {reward_display}\n'
+                 f'Action: {action_display}',
+                 loc='left')
 
     # Each cells shows the id of the avatar that is there
     display_map = np.full(map.shape, fill_value='')
