@@ -36,7 +36,7 @@ def main(config_path: str):
     # Main loop
     for update_number in progress_bar(range(config.num_unguided_updates), 'Random'):
         # Collect rollouts and update weights
-        training_history = perform_update(config, env, policies, storages, action_sampling='uniform')
+        training_history = perform_update(config, env, policies, storages)
 
         # Write progress summaries
         if do_this_iteration(config.log_interval, update_number, config.num_unguided_updates):

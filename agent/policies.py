@@ -17,6 +17,11 @@ class Policy:
         self.entropy_coef = config.entropy_coef
         self.entropy_coef_decay_interval = config.entropy_coef_decay_interval
         self.entropy_coef_decay_factor = config.entropy_coef_decay_factor
+
+        self.exploration_proba = config.exploration_proba
+        self.exploration_proba_decay_interval = config.exploration_proba_decay_interval
+        self.exploration_proba_decay_factor = config.exploration_proba_decay_factor
+
         self.update_number = 0
 
         self.max_grad_norm = config.max_grad_norm
@@ -29,7 +34,7 @@ class Policy:
         self.optimizer = torch.optim.Adam(self.all_parameters, lr=config.lr)
         self.lr_decay = torch.optim.lr_scheduler.StepLR(self.optimizer, config.lr_decay_interval, config.lr_decay_factor)
 
-    def pick_action(self, env_state, rec_h, rec_c, explore_proba: float, deterministic: bool, forced_action: int = None):
+    def pick_action(self, env_state, rec_h, rec_c, deterministic: bool, forced_action: int = None):
         """
         In the given env_state, pick a single action.
         Called during rollouts collection to generate the next action, one by one
@@ -63,7 +68,7 @@ class Policy:
         else:
             most_likely = action_distributions.probs.argmax()
             # Explore uniformly (but not the most probable action)
-            if np.random.rand() < explore_proba:
+            if np.random.rand() < self.exploration_proba:
                 probas = self.one_fewer_action_probas.copy()
                 probas[most_likely.item()] = 0
                 action = np.random.choice(self.num_actions, p=probas)
@@ -134,6 +139,9 @@ class Policy:
         self.update_number += 1
         if self.update_number % self.entropy_coef_decay_interval == 0:
             self.entropy_coef *= self.entropy_coef_decay_factor
+        if self.update_number % self.exploration_proba_decay_interval == 0:
+            self.exploration_proba *= self.exploration_proba_decay_factor
+        # TODO log these changing things
 
 
 class PG(Policy):

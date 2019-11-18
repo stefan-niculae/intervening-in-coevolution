@@ -50,7 +50,7 @@ def _get_initial_recurrent_state(avatar_policies):
     return rec_hs, rec_cs
 
 
-def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_storages: List[RolloutStorage], action_sampling):
+def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_storages: List[RolloutStorage]):
     """ Collects rollouts and updates """
 
     # Used to log
@@ -98,7 +98,6 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                     rec_hs[avatar_id],
                     rec_cs[avatar_id],
                     deterministic=False,
-                    explore_proba=0,
                 )
 
                 if first_episode_step:

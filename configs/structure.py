@@ -27,13 +27,13 @@ class Config:
 
     # Encourage "exploration"
     entropy_coef: float = .01
-
     entropy_coef_decay_interval: int = 10
-
     entropy_coef_decay_factor: float = .1
 
     # Force exploration
-    uniform_exploration_proba: float = .1
+    exploration_proba: float = .9
+    exploration_proba_decay_interval: int = 10
+    exploration_proba_decay_factor: float = .1
 
     """ Controller """
     # Controller architecture — check agent/controllers.py
