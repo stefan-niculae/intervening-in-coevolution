@@ -32,8 +32,8 @@ class Config:
     entropy_coef_values:       List[float] = (.01, .001)
 
     # Force exploration: sample actions at random
-    explore_proba_milestones:  List[int]   = (  0,  10, 20)
-    explore_proba_values:      List[float] = ( .9,  .5,  0)
+    uniform_proba_milestones:  List[int]   = (  0,  10, 20)
+    uniform_proba_values:      List[float] = ( .9,  .5,  0)
 
     # Don't consult the model in sampling actions, instead follow pre-scripted behavior
     scripted_proba_milestones: List[int]   = (  0,  20,  30)

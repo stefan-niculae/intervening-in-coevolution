@@ -1,5 +1,5 @@
 {
-  "scenario": "6x6-2xthief-2xguardian",
+  "scenario": "6x6,2v2",
   "time_limit": 100,
   "allow_noop": true,
 
@@ -19,8 +19,8 @@
   "entropy_coef_milestones":   [   0],
   "entropy_coef_values":       [0.01],
 
-  "explore_proba_milestones":  [0],
-  "explore_proba_values":      [0],
+  "uniform_proba_milestones":  [0],
+  "uniform_proba_values":      [0],
 
   "scripted_proba_milestones": [0],
   "scripted_proba_values":     [1],

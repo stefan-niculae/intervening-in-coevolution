@@ -3,10 +3,19 @@ import numpy as np
 
 from configs.structure import Config
 
-SAMPLE   = 0
-EXPLORE  = 1
-SCRIPTED = 2
-INVERSE  = 3
+SAMPLE        = 0
+UNIFORM       = 1
+SCRIPTED      = 2
+INVERSE       = 3
+DETERMINISTIC = 4
+
+action_source_names = {
+    SAMPLE: 'sample',
+    UNIFORM: 'uniform',
+    SCRIPTED: 'scripted',
+    INVERSE: 'inverse',
+    DETERMINISTIC: 'deterministic',
+}
 
 
 def make_schedule(milestones: List[int], values: List[float], num_iterations: int) -> np.array:
@@ -32,11 +41,11 @@ class Scheduler:
         iters = config.num_iterations + 1
         self.lrs            = make_schedule(config.lr_milestones,             config.lr_values,             iters)
         self.entropy_coefs  = make_schedule(config.entropy_coef_milestones,   config.entropy_coef_values,   iters)
-        self.explore_proba  = make_schedule(config.explore_proba_milestones,  config.explore_proba_values,  iters)
+        self.uniform_proba  = make_schedule(config.uniform_proba_milestones,  config.uniform_proba_values,  iters)
         self.scripted_proba = make_schedule(config.scripted_proba_milestones, config.scripted_proba_values, iters)
         self.inverse_proba  = make_schedule(config.inverse_proba_milestones,  config.inverse_proba_values,  iters)
 
-        self.sample_proba = 1 - self.explore_proba - self.scripted_proba - self.inverse_proba
+        self.sample_proba = 1 - self.uniform_proba - self.scripted_proba - self.inverse_proba
         self.sample_proba = np.maximum(0, self.sample_proba)
 
         self.current_update = 0
@@ -52,22 +61,21 @@ class Scheduler:
     def _normalized_action_source_probas(self) -> np.array:
         p = np.array([
             self.sample_proba  [self.current_update],
-            self.explore_proba [self.current_update],
+            self.uniform_proba [self.current_update],
             self.scripted_proba[self.current_update],
             self.inverse_proba [self.current_update],
         ])
         return p / sum(p)
 
-    @property
-    def action_source(self) -> int:
+    def pick_action_source(self) -> int:
         return np.random.choice(4, p=self._normalized_action_source_probas())
 
     @property
     def current_values(self) -> dict:
         """ For logging """
         probas = {
-            name + '_proba': p
-            for name, p in zip(['sample', 'explore', 'scripted', 'inverse'], self._normalized_action_source_probas())
+            action_source_names[i] + '_proba': p
+            for i, p in enumerate(self._normalized_action_source_probas())
         }
         return {
             'lr':            self.lr,

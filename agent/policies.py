@@ -7,7 +7,7 @@ from torch.distributions.categorical import Categorical
 
 from configs.structure import Config
 from agent.controllers import CONTROLLER_CLASSES
-from intervening.scheduling import Scheduler, SAMPLE, EXPLORE, SCRIPTED, INVERSE
+from intervening.scheduling import Scheduler, SAMPLE, UNIFORM, INVERSE, DETERMINISTIC
 
 
 def softmax(x: np.array) -> np.array:
@@ -35,7 +35,7 @@ class Policy:
             lambda _: self.scheduler.lr
         )
 
-    def pick_action(self, env_state, rec_h, rec_c, deterministic: bool, scripted_action_picker=None):
+    def pick_action(self, env_state, rec_h, rec_c, sampling_method: int, externally_chosen_action:int = None):
         """
         In the given env_state, pick a single action.
         Called during rollouts collection to generate the next action, one by one
@@ -63,27 +63,28 @@ class Policy:
         )
 
         action_distributions = Categorical(logits=actor_logits)  # float tensor of shape [1, num_actions]
-        if deterministic:
-            action = action_distributions.probs.argmax()
-        else:
-            action_source = self.scheduler.action_source
 
+        # Take the action provided
+        if externally_chosen_action is not None:
+            action = externally_chosen_action
+
+        else:
             # Sample according to the learned distribution
-            if action_source == SAMPLE:
+            if sampling_method == SAMPLE:
                 action = action_distributions.sample()
 
+            # Pick most probable action
+            elif sampling_method == DETERMINISTIC:
+                action = action_distributions.probs.argmax()
+
             # Explore uniformly
-            elif action_source == EXPLORE:
+            elif sampling_method == UNIFORM:
                 action = np.random.choice(self.num_actions)
 
             # Sample the opposite probabilities
-            elif action_source == INVERSE:
+            elif sampling_method == INVERSE:
                 p = 1 / softmax(actor_logits.numpy())
                 action = np.random.choice(self.num_actions, p=p / sum(p))
-
-            # Act according to predefined rules
-            elif action_source == SCRIPTED:
-                action = scripted_action_picker()
 
         if type(action) is int:
             action = torch.LongTensor([action])

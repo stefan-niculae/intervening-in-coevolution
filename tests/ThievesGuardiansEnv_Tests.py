@@ -15,6 +15,15 @@ from environment.thieves_guardians_env import (
 class BasicMovementTests(unittest.TestCase):
     def setUp(self):
         """Create simple environment to test thief and guardian movements."""
+        """
+        '4x4-test-movements': [
+            [_, _, _, _],
+            [_, T, _, _],
+            [_, _, G, _],
+            [_, _, _, S],
+        ],
+
+        """
         self._env = TGEnv('4x4-test-movements')
         self._init_thief_pos = self._env._id2pos[0]
         self._init_guard_pos = self._env._id2pos[1]
@@ -140,6 +149,15 @@ class BasicMovementTests(unittest.TestCase):
 class WallMovementsTests(unittest.TestCase):
     def setUp(self):
         """Create simple environment where thief and guardian can't move."""
+        """
+        '4x4-test-movements-walls': [
+            [_, W, _, _],
+            [W, T, W, _],
+            [_, W, G, W],
+            [_, _, W, _],
+        ],
+        """
+
         self._env = TGEnv('4x4-test-movements-walls')
         self._init_thief_pos = self._env._id2pos[0]
         self._init_guard_pos = self._env._id2pos[1]

@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 import numpy as np
 
-from environment.thieves_guardians_env import (
-    EMPTY    as _,
-    WALL     as W,
-    THIEF    as T,
-    GUARDIAN as G,
-    TREASURE as S,
-)
+from environment.thieves_guardians_env import EMPTY, WALL, THIEF, GUARDIAN, TREASURE
+
+_ = EMPTY
+W = WALL
+T = THIEF
+G = GUARDIAN
+S = TREASURE
 
 
 @dataclass
@@ -21,52 +21,21 @@ class Scenario:
 
 
 _fixed_scenario_maps = {
-    'test-kill': [
-        [T, T, G, _],
-    ],
-
-    '4x4-test-movements': [
-        [_, _, _, _],
-        [_, T, _, _],
-        [_, _, G, _],
-        [_, _, _, S],
-    ],
-
-    '4x4-test-movements-walls': [
-        [_, W, _, _],
-        [W, T, W, _],
-        [_, W, G, W],
-        [_, _, W, _],
-    ],
-
-    '4x4-test-rewards': [
-        [_, S, _, _],
-        [_, T, _, _],
-        [_, G, _, _],
-        [_, _, _, _],
-    ],
-
-    '3x3-test-2thief-1guardian': [
-        [T, _, G],
-        [T, _, _],
-        [_, _, S],
-    ],
-
-    '4x4-thief-treasure': [
+    '4x4,1v0': [
         [T, _, _, _],
         [_, _, _, _],
         [_, _, _, _],
         [_, _, _, S],
     ],
 
-    '4x4-thief-guardian-treasure': [
+    '4x4,1v1': [
         [T, _, _, G],
         [_, _, _, _],
         [_, _, _, _],
         [_, _, _, S],
     ],
 
-    '6x6-thief-guardian': [
+    '6x6,1v1': [
         [T, _, _, _, _, _],
         [_, _, _, _, _, G],
         [_, _, _, _, _, _],
@@ -75,7 +44,7 @@ _fixed_scenario_maps = {
         [_, _, _, _, _, S],
     ],
 
-    '6x6-2xthief-2xguardian': [
+    '6x6,2v2': [
         [T, _, _, _, _, G],
         [T, _, _, _, _, G],
         [_, _, _, _, _, _],
@@ -85,13 +54,19 @@ _fixed_scenario_maps = {
     ],
 
     # TODO wall layout
-    '6x6-2xthief-2xguardian-walls': [
+    '6x6,2v2,w': [
         [T, _, W, _, _, G],
         [T, _, _, W, _, G],
         [_, _, _, _, _, _],
         [_, _, W, W, _, _],
         [_, _, _, _, _, W],
         [_, _, _, _, _, S],
+    ],
+
+    '3x3,2v1': [
+        [T, _, G],
+        [T, _, _],
+        [_, _, S],
     ],
 }
 
@@ -182,27 +157,26 @@ def generate_random_map(scenario_name: str) -> np.array:
     scenario = random_scenario_configs[scenario_name[-1]]
     quadrant_ranges = _compute_quadrants(scenario.width, scenario.height)
 
-    map = np.zeros((scenario.width, scenario.height))
-    map[:, :] = _
+    map = np.full((scenario.width, scenario.height), EMPTY)
 
     # Place walls
     wall_mask = np.random.rand(scenario.width, scenario.height) < scenario.wall_density
-    map[wall_mask] = W
+    map[wall_mask] = WALL
 
     # Pick areas for the teams and treasure
     thieves_quad, guardians_quad, treasure_quad = np.random.choice(4, size=3, replace=False)
 
     # Place treasure
     treasure_pos = _random_empty_cell(map, quadrant_ranges, treasure_quad)
-    map[treasure_pos] = S  # TODO walls don't block off objects
+    map[treasure_pos] = TREASURE  # TODO walls don't block off objects
 
     # Place the thieves and guardians
     for avatar_id in range(scenario.n_thieves):
         x, y = _random_empty_cell(map, quadrant_ranges, thieves_quad)
-        map[x, y] = T
+        map[x, y] = THIEF
 
     for avatar_id in range(scenario.n_thieves, scenario.n_thieves + scenario.n_guardians):
         x, y = _random_empty_cell(map, quadrant_ranges, guardians_quad)
-        map[x, y] = G
+        map[x, y] = GUARDIAN
 
     return map

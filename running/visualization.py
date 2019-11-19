@@ -5,6 +5,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from agent.policies import Policy
 
+
 TEAM_NAMES = [
     'Thieves',
     'Guardians'

@@ -1,13 +1,13 @@
 """ Routing avatars to storages and policies  """
 
 from typing import List
-from functools import partial
 
 from configs.structure import Config
 from environment.thieves_guardians_env import TGEnv
 from agent.policies import POLICY_CLASSES, Policy, softmax
 from agent.storage import RolloutStorage
 from running.utils import EpisodeAccumulator
+from intervening.scheduling import SCRIPTED
 
 
 def instantiate(config: Config) -> (TGEnv, List[Policy], List[RolloutStorage]):
@@ -88,6 +88,12 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                 team = env.id2team[avatar_id]
                 policy = team_policies[team]
 
+                action_source = policy.scheduler.pick_action_source()
+                if action_source == SCRIPTED:
+                    scripted_action = env.scripted_action(avatar_id)
+                else:
+                    scripted_action = None
+
                 (
                     actions[avatar_id],
                     action_log_probs[avatar_id],
@@ -98,8 +104,8 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                     env_states[avatar_id],
                     rec_hs[avatar_id],
                     rec_cs[avatar_id],
-                    deterministic=False,
-                    scripted_action_picker=partial(env.scripted_action, avatar_id)
+                    sampling_method=action_source,
+                    externally_chosen_action=scripted_action,
                 )
 
                 if first_episode_step:

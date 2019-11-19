@@ -334,8 +334,10 @@ class TGEnv:
         if tc < c:
             return LEFT
 
-        print('id', avatar_id, 'self', r, c, 'target', tr, tc)
-        return NOOP
+        print(f'Warning: could not pick action for avatar #{avatar_id}, of team {team}'
+              f'(current pos = ({r}, {c}), target pos = ({tr}, {tc}).'
+              f'Defaulting to UP ({UP}).')
+        return UP
 
     def __str__(self):
         CELL_TYPE2LETTER = {

@@ -8,7 +8,7 @@ from agent.policies import Policy
 from running.training import _get_initial_recurrent_state
 
 
-def evaluate(env: TGEnv, team_policies: List[Policy], deterministic: bool):
+def evaluate(env: TGEnv, team_policies: List[Policy], sampling_method: int):
     map_history     = []
     pos2id_history  = []
     rewards_history = []
@@ -51,7 +51,7 @@ def evaluate(env: TGEnv, team_policies: List[Policy], deterministic: bool):
                     env_states[avatar_id],
                     rec_hs[avatar_id],
                     rec_cs[avatar_id],
-                    deterministic=deterministic,
+                    sampling_method=sampling_method
                 )
             else:
                 actions[avatar_id] = DEAD

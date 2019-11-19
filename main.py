@@ -13,6 +13,7 @@ from running.visualization import log_layers, log_scalars
 from running.utils import paths, do_this_iteration, save_code
 from environment.visualization import create_animation
 from configs.structure import read_config, save_config
+from intervening.scheduling import SAMPLE, DETERMINISTIC, action_source_names
 
 
 def main(config_path: str):
@@ -45,10 +46,9 @@ def main(config_path: str):
 
         # Evaluate and record video
         if do_this_iteration(config.eval_interval, update_number, config.num_iterations):
-            for deterministic in [True, False]:
-                env_history = evaluate(env, policies, deterministic)
-                suffix = 'deterministic' if deterministic else 'sampling'
-                create_animation(env_history, video_path % (update_number, suffix))
+            for sampling_method in [SAMPLE, DETERMINISTIC]:
+                env_history = evaluate(env, policies, sampling_method)
+                create_animation(env_history, video_path % (update_number, action_source_names[sampling_method]))
 
         # Checkpoint current model weights
         if do_this_iteration(config.save_interval, update_number, config.num_iterations):
