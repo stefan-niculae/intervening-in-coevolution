@@ -59,7 +59,8 @@ def evaluate(env: TGEnv, team_policies: List[Policy], sampling_method: int):
         # Step the environment with one action for each avatar
         env_states, rewards, dones, infos = env.step(actions)
         cumulative_reward += rewards
-        actions_history.append([ACTION_IDX2SYMBOL[a] for a in actions])
+        actions_history.append([ACTION_IDX2SYMBOL[env._interpret_action(a, env.id2team[i])]
+                                for i, a in enumerate(actions)])
 
     # Add final state as well
     map_history    .append(env._map.copy())

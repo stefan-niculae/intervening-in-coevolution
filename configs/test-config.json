@@ -1,29 +1,30 @@
 {
   "scenario": "3x3,2v1",
   "time_limit": 10,
-  "allow_noop": false,
+  "allow_noop": [false, true],
+  "allow_diagonals": [true, true],
 
   "algorithm": "pg",
   "controller": "fc",
   "num_recurrent_layers": 0,
   "num_hidden_layers": 1,
 
-  "num_iterations": 10,
+  "num_iterations": 3,
   "num_transitions": 22,
   "batch_size": 10,
-  "num_epochs": 2,
+  "num_epochs": 1,
   
-  "entropy_coef_milestones":   [   0,     5],
-  "entropy_coef_values":       [0.01, 0.001],
+  "entropy_coef_milestones":   [   0],
+  "entropy_coef_values":       [0.01],
 
-  "uniform_proba_milestones":  [  0,    2,  4],
-  "uniform_proba_values":      [ 0.9, 0.5,  0],
+  "uniform_proba_milestones":  [ 0],
+  "uniform_proba_values":      [ 1],
 
-  "scripted_proba_milestones": [  0,    4,  6],
-  "scripted_proba_values":     [  0,  1.0,  0],
+  "scripted_proba_milestones": [  0],
+  "scripted_proba_values":     [  0],
 
-  "lr_milestones":             [   0,     4],
-  "lr_values":                 [0.001, 0.01],
+  "lr_milestones":             [   0],
+  "lr_values":                 [0.001],
 
   "inverse_proba_milestones":  [0],
   "inverse_proba_values":      [0],

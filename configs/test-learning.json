@@ -1,7 +1,8 @@
 {
   "scenario": "6x6,2v2",
   "time_limit": 100,
-  "allow_noop": true,
+  "allow_noop": [true, true],
+  "allow_diagonals": [false, false],
 
   "algorithm": "pg",
   "controller": "conv",

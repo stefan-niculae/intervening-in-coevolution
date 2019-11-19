@@ -23,8 +23,8 @@ def instantiate(config: Config) -> (TGEnv, List[Policy], List[RolloutStorage]):
     # Each team has its own copy of the policy
     policy_class = POLICY_CLASSES[config.algorithm]
     team_policies = [
-        policy_class(config, env.state_shape, env.num_actions)
-        for _ in range(env.num_teams)
+        policy_class(config, env.state_shape, env.num_actions[team])
+        for team in range(env.num_teams)
     ]
 
     return env, team_policies, avatar_storages
@@ -57,7 +57,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     # Used to log
     total_rewards     = EpisodeAccumulator(env.num_avatars)
     steps_alive       = EpisodeAccumulator(env.num_avatars)
-    first_step_probas = EpisodeAccumulator(env.num_avatars, env.num_actions)
+    first_step_probas = EpisodeAccumulator(env.num_avatars, max(env.num_actions))
     end_reasons = []
 
     # Will be filled in for each avatar when stepping the environment individually
@@ -109,7 +109,8 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                 )
 
                 if first_episode_step:
-                    first_step_probas.current[avatar_id] = softmax(actor_logits.detach().numpy().flatten())
+                    probas = softmax(actor_logits.detach().numpy().flatten())
+                    first_step_probas.current[avatar_id, :len(probas)] = probas
 
         # Step the environment with one action for each avatar
         next_env_states, rewards, dones, info = env.step(actions)

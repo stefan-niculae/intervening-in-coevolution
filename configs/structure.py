@@ -13,8 +13,11 @@ class Config:
     # in each step all alive avatars move once
     time_limit: int = 30
 
-    # Whether avatars can chose to do nothing for one timestep
-    allow_noop: bool = False
+    # Whether avatars in each team can chose to do nothing for one timestep
+    allow_noop: List[bool] = (False, False)
+
+    # Whether avatars in each team can move in eight directions, diagonally
+    allow_diagonals: List[bool] = (False, True)
 
     """ Policy """
     # Check agent/policies.py

@@ -12,21 +12,29 @@ WALL     = 3
 TREASURE = 4
 
 # Actions
-UP    = 0
-DOWN  = 1
-LEFT  = 2
-RIGHT = 3
-NOOP  = 4  # must be last one
+UP         = 0
+DOWN       = 1
+LEFT       = 2
+RIGHT      = 3
+UP_LEFT    = 4
+UP_RIGHT   = 5
+DOWN_LEFT  = 6
+DOWN_RIGHT = 7
+NOOP       = 8  # must be last one
 
 
 DEAD = -1
 ACTION_IDX2SYMBOL = {
-    UP:     '⬆️',
-    DOWN:   '⬇️',
-    LEFT:   '⬅️',
-    RIGHT:  '➡️️',
-    NOOP:   'n',
-    DEAD:   '◼️',
+    UP:         '⬆️',
+    DOWN:       '⬇️',
+    LEFT:       '⬅️',
+    RIGHT:      '➡️️',
+    UP_LEFT:    '⬉',
+    UP_RIGHT:   '⬈',
+    DOWN_LEFT:  '⬋',
+    DOWN_RIGHT: '⬊',
+    NOOP:       'N',
+    DEAD:       'D',
 }
 
 action_idx2delta = {
@@ -36,6 +44,10 @@ action_idx2delta = {
     RIGHT: np.array([ 0, +1]),
     NOOP:  np.array([ 0,  0]),
 }
+action_idx2delta[UP_RIGHT]   = action_idx2delta[UP]   + action_idx2delta[RIGHT]
+action_idx2delta[UP_LEFT]    = action_idx2delta[UP]   + action_idx2delta[LEFT]
+action_idx2delta[DOWN_RIGHT] = action_idx2delta[DOWN] + action_idx2delta[RIGHT]
+action_idx2delta[DOWN_LEFT]  = action_idx2delta[DOWN] + action_idx2delta[LEFT]
 
 
 # (thief reward, guardian reward)
@@ -81,9 +93,14 @@ class TGEnv:
         self.num_teams = int(scenario.n_thieves != 0) + int(scenario.n_guardians != 0)
 
         self.state_shape = (5, self._width, self._height)
-        self.num_actions = len(action_idx2delta)
-        if not config.allow_noop:
-            self.num_actions -= 1  # the last one is NOOP
+        self.allow_noops = config.allow_noop
+        self.allow_diagonals = config.allow_diagonals
+        self.num_actions = [4] * self.num_teams  # by default they can all move in four directions
+        for team, (noop, diagonals) in enumerate(zip(self.allow_noops, self.allow_diagonals)):
+            if noop:
+                self.num_actions[team] += 1
+            if diagonals:
+                self.num_actions[team] += 4
 
         self._num_thieves = scenario.n_thieves
         self.elapsed_time = None
@@ -156,6 +173,32 @@ class TGEnv:
             self._id2pos[avatar_id] = new_pos
             self._pos2id[new_pos] = avatar_id
 
+    def _interpret_action(self, action_idx: int, team: int):
+        """
+        0,1,2,3 are always up,down,left,right
+        if noop is enabled, but diagonals disabled: 4 is noop
+        if noop is disabled, but diagonals enabled: 4,5,6,7 are upleft,upright,downleft,downright
+        if both noop and diagonals are enabled: 4,5,6,7 are upleft,upright,downleft,downright and 8 is noop
+        """
+        if action_idx < 4:
+            return action_idx
+
+        noops = self.allow_noops[team]
+        diags = self.allow_diagonals[team]
+        assert noops or diags
+
+        if noops and not diags:
+            assert action_idx == 4
+            return NOOP
+
+        if not noops and diags:
+            assert action_idx < 8
+            return action_idx
+
+        if noops and diags:
+            assert action_idx < 9
+            return action_idx
+
     def step(self, actions: [int]):
         """
         actions shape: (num_avatars,)
@@ -178,14 +221,13 @@ class TGEnv:
         for avatar_id in range(self.num_avatars):
             if not self.avatar_alive[avatar_id]:
                 continue
+
+            # Apply every-timestep reward
             team = self.id2team[avatar_id]
             reward[avatar_id] += REWARDS['time'][team]
 
-        for avatar_id in range(self.num_avatars):
-            if not self.avatar_alive[avatar_id]:
-                continue
-
-            action_idx = actions[avatar_id]
+            # Interpret actions
+            action_idx = self._interpret_action(actions[avatar_id], team)
             delta = action_idx2delta[action_idx]
             old_pos = self._id2pos[avatar_id]
             new_pos = tuple(old_pos + delta)  # NOTE: make sure self.map[pos] the arg is a tuple, not a (2,) array
