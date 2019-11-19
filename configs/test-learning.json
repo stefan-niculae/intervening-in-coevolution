@@ -1,31 +1,42 @@
 {
   "scenario": "6x6-2xthief-2xguardian",
-  "time_limit": 120,
-  "allow_noop": false,
+  "time_limit": 20,
+  "allow_noop": true,
 
-  "algorithm": "ppo",
-  "controller": "conv",
+  "algorithm": "pg",
+  "controller": "fc",
 
-  "hidden_layer_size": 128,
-  "num_hidden_layers": 3,
-  "activation_function": "tanh",
-  "recurrent_layer_size": 50,
+  "hidden_layer_size": 10,
+  "num_hidden_layers": 1,
+  "activation_function": "relu",
   "num_recurrent_layers": 0,
 
-  "num_updates": 30,
-  "num_transitions": 3000,
-  "batch_size": 512,
-  "num_epochs": 5,
+  "num_iterations": 5,
+  "num_transitions": 55,
+  "batch_size": 50,
+  "num_epochs": 1,
 
-  "lr": 0.01,
-  "lr_decay_interval": 10,
-  "lr_decay_factor": 0.1,
-  "entropy_coef": 0.001,
+  "entropy_coef_milestones":   [   0],
+  "entropy_coef_values":       [0.01],
+
+  "explore_proba_milestones":  [0],
+  "explore_proba_values":      [0],
+
+  "scripted_proba_milestones": [0],
+  "scripted_proba_values":     [1],
+
+  "lr_milestones":             [0],
+  "lr_values":                 [0.001],
+
+  "inverse_proba_milestones":  [0],
+  "inverse_proba_values":      [0],
+
+
   "discount": 0.99,
   "max_grad_norm": 10,
 
   "log_interval": 1,
-  "eval_interval": 10,
+  "eval_interval": 1,
   "save_interval": 0,
 
   "seed": 0

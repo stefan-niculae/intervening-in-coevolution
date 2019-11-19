@@ -17,7 +17,7 @@ def softmax(x: np.array) -> np.array:
 
 class Policy:
     """ Abstract class """
-    def __init__(self, config: Config, env_state_shape, num_actions):
+    def __init__(self, config: Config, env_state_shape: tuple, num_actions: int):
         controller_class = CONTROLLER_CLASSES[config.controller]
         self.controller = controller_class(config, env_state_shape, num_actions)
 
@@ -35,7 +35,7 @@ class Policy:
             lambda _: self.scheduler.lr
         )
 
-    def pick_action(self, env_state, rec_h, rec_c, deterministic: bool):
+    def pick_action(self, env_state, rec_h, rec_c, deterministic: bool, scripted_action_picker=None):
         """
         In the given env_state, pick a single action.
         Called during rollouts collection to generate the next action, one by one
@@ -83,7 +83,7 @@ class Policy:
 
             # Act according to predefined rules
             elif action_source == SCRIPTED:
-                action = 0  # TODO
+                action = scripted_action_picker()
 
         if type(action) is int:
             action = torch.LongTensor([action])

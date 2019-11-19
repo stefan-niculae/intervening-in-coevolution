@@ -47,6 +47,12 @@ REWARDS = {
 }
 
 
+def _coords_where(grid: np.array):
+    """ A position (x, y) of an arbitrary one in the grid """
+    xs, ys = np.where(grid == 1)
+    return xs[0], ys[0]
+
+
 class TGEnv:
     """
     Thieves aim to reach a treasure, guardians aim to catch the thieves
@@ -74,26 +80,27 @@ class TGEnv:
         self.num_avatars = scenario.n_thieves + scenario.n_guardians
         self.num_teams = int(scenario.n_thieves != 0) + int(scenario.n_guardians != 0)
 
-        # self.state_shape = (5, self._width, self._height)
         self.state_shape = (5, self._width, self._height)
         self.num_actions = len(action_idx2delta)
         if not config.allow_noop:
             self.num_actions -= 1  # the last one is NOOP
 
-        self._n_thieves = scenario.n_thieves
+        self._num_thieves = scenario.n_thieves
         self.elapsed_time = None
-        self._n_remaining_thieves = None
+        self._num_remaining_thieves = None
         self.avatar_alive = None
         self._map = None
         self._id2pos = None
         self._pos2id = None
         self._walls_channel = None
         self._treasure_channel = None
+        self._chased_thief = None
+        self._thief_target = None
         self.reset()
 
     def reset(self):
         self.elapsed_time = 0
-        self._n_remaining_thieves = self._n_thieves
+        self._num_remaining_thieves = self._num_thieves
 
         self._id2pos = {}
         self._pos2id = {}
@@ -124,6 +131,9 @@ class TGEnv:
             self._id2pos[avatar_id] = x, y
             self._pos2id[(x, y)] = avatar_id
 
+        self._thief_target = _coords_where(self._treasure_channel)
+        self._chased_thief = 0
+
     def _move_or_kill(self, avatar_id, avatar_team, old_pos, new_pos=None):
         self._map[old_pos] = EMPTY
         del self._pos2id[old_pos]
@@ -131,7 +141,14 @@ class TGEnv:
         # When moved out of the map (killed)
         if new_pos is None:
             assert avatar_team == THIEF
-            self._n_remaining_thieves -= 1
+            self._num_remaining_thieves -= 1
+
+            # Find a new target for the guardians: the first thief that is not alive
+            if avatar_id == self._chased_thief and self._num_remaining_thieves > 0:
+                for thief_id in range(self._num_thieves):
+                    if self.avatar_alive[thief_id]:
+                        self._chased_thief = thief_id
+                        break
 
         # When moved to a new valid position
         else:
@@ -242,7 +259,7 @@ class TGEnv:
                 continue
 
         # No more thieves alive, the game is over (thieves and guardians have been rewarded at the moments of killing)
-        if self._n_remaining_thieves == 0:
+        if self._num_remaining_thieves == 0:
             info['end_reason'] = 'All thieves dead'
             done[:] = True
 
@@ -282,7 +299,7 @@ class TGEnv:
         if not self.avatar_alive[for_id]:
             return None
 
-        own_pos  = self._id2pos [for_id]
+        own_pos  = self._id2pos[for_id]
         own_team = self.id2team[for_id]
         opposing_team = GUARDIAN if own_team == THIEF else THIEF
 
@@ -299,6 +316,26 @@ class TGEnv:
 
         # Channels first
         return np.stack([own, teammates, opponents, self._walls_channel, self._treasure_channel])
+
+    def scripted_action(self, avatar_id):
+        r, c = self._id2pos[avatar_id]
+        team = self.id2team[avatar_id]
+        if team == THIEF:
+            tr, tc = self._thief_target
+        else:
+            tr, tc = self._id2pos[self._chased_thief]
+
+        if tr > r:
+            return DOWN
+        if tr < r:
+            return UP
+        if tc > c:
+            return RIGHT
+        if tc < c:
+            return LEFT
+
+        print('id', avatar_id, 'self', r, c, 'target', tr, tc)
+        return NOOP
 
     def __str__(self):
         CELL_TYPE2LETTER = {

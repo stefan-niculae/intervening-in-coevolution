@@ -41,7 +41,6 @@ def evaluate(env: TGEnv, team_policies: List[Policy], deterministic: bool):
                 # Chose action based on the policy
                 team = env.id2team[avatar_id]
                 policy = team_policies[team]
-
                 (
                     actions[avatar_id],
                     action_log_probs[avatar_id],

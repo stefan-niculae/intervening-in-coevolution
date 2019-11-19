@@ -1,6 +1,7 @@
 """ Routing avatars to storages and policies  """
 
 from typing import List
+from functools import partial
 
 from configs.structure import Config
 from environment.thieves_guardians_env import TGEnv
@@ -98,6 +99,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                     rec_hs[avatar_id],
                     rec_cs[avatar_id],
                     deterministic=False,
+                    scripted_action_picker=partial(env.scripted_action, avatar_id)
                 )
 
                 if first_episode_step:
