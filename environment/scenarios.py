@@ -123,7 +123,7 @@ random_scenario_configs = {
         height=8,
         n_thieves=2,
         n_guardians=2,
-        wall_density=.2,
+        wall_density=.0,
         fixed_map=None,
     ),
 
@@ -152,7 +152,7 @@ def _random_empty_cell(map, quadrant_ranges, quadrant_idx) -> (int, int):
     while map[x, y] != _:
         x, y = random_cell(*ranges)
         failsafe += 1
-        if failsafe == 100:
+        if failsafe == 1000:
             raise Exception(f'Could not find an open space in quadrant {quadrant_idx}')
     return x, y
 
@@ -182,7 +182,8 @@ def generate_random_map(scenario_name: str) -> np.array:
     scenario = random_scenario_configs[scenario_name[-1]]
     quadrant_ranges = _compute_quadrants(scenario.width, scenario.height)
 
-    map = np.zeros(scenario.width, scenario.height)
+    map = np.zeros((scenario.width, scenario.height))
+    map[:, :] = _
 
     # Place walls
     wall_mask = np.random.rand(scenario.width, scenario.height) < scenario.wall_density
