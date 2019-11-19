@@ -1,5 +1,6 @@
 import json
 from dataclasses import dataclass, asdict
+from typing import List
 
 
 @dataclass
@@ -25,15 +26,26 @@ class Config:
     # Critic
     critic_coef: float = .5
 
-    # Encourage "exploration"
-    entropy_coef: float = .01
-    entropy_coef_decay_interval: int = 10
-    entropy_coef_decay_factor: float = .1
+    """ Intervening """
+    # Encourage exploration: by optimizing for diversity in action distributions
+    entropy_coef_milestones:   List[int]   = (  0,   20)
+    entropy_coef_values:       List[float] = (.01, .001)
 
-    # Force exploration
-    explore_proba: float = .9
-    explore_proba_decay_interval: int = 10
-    explore_proba_decay_factor: float = .1
+    # Force exploration: sample actions at random
+    explore_proba_milestones:  List[int]   = (  0,  10, 20)
+    explore_proba_values:      List[float] = ( .9,  .5,  0)
+
+    # Don't consult the model in sampling actions, instead follow pre-scripted behavior
+    scripted_proba_milestones: List[int]   = (  0,  20,  30)
+    scripted_proba_values:     List[float] = (  0,  1.,   0)
+
+    # Learning rate
+    lr_milestones:             List[int]   = (   0,  10,   40)
+    lr_values:                 List[float] = (.001, .01, .001)
+
+    # Inverse
+    inverse_proba_milestones:  List[int] = (0,)
+    inverse_proba_values:      List[int] = (0.,)
 
     """ Controller """
     # Controller architecture — check agent/controllers.py
@@ -53,18 +65,14 @@ class Config:
     # Random seed
     seed: int = 0
 
-    num_demonstrative_updates: int = 10
-
-    num_random_updates: int = 3
-
     # Number of model updates
-    num_updates: int = 100
+    num_iterations: int = 60
 
-    # Gather this many transitions before running a model update
-    num_transitions: int = 1000
+    # Gather this many transitions for each iteration
+    num_transitions: int = 2000
 
     # How large the batches of transitions should be
-    batch_size: int = 5
+    batch_size: int = 256
 
     # How many times to iterate over all transitions
     num_epochs: int = 5
@@ -74,30 +82,22 @@ class Config:
     discount: float = .99
 
     """ Optimizer """
-    # Learning rate
-    lr: float = 7e-4
-
-    # How often to decay the learning rate
-    lr_decay_interval: int = 10
-
-    # How much to decay the learning rate
-    lr_decay_factor: float = .25
-
     # Adam optimizer parameter
     adam_epsilon: float = 1e-5
 
     # Max norm of the gradients
-    max_grad_norm: float = .5
+    max_grad_norm: float = 5
 
     """ Logging """
+    """ Set to 0 to disable, if non-zero, will also do it on the last iteration """
     # After how many updates to update the progress plot
-    log_interval: int = 10  # set to 0 for no logging
+    log_interval: int = 1
 
     # After how many updates to save the model
-    save_interval: int = 10  # set to 0 for no saving
+    save_interval: int = 999
 
-    # After how many updates to evaluate (run deterministically) and save a video
-    eval_interval: int = 5  # set to 0 for no evaluation
+    # After how many updates to film a rollout
+    eval_interval: int = 5
 
 
 def read_config(config_path: str) -> Config:

@@ -32,33 +32,38 @@ def log_descriptive_statistics(array: np.array, prefix: str, writer, update_numb
         )
 
 
-def log_scalars(training_history: (np.array, np.array, np.array, [str], [dict], dict), writer: SummaryWriter, update_number: int):
+def log_scalars(training_history: (np.array, np.array, np.array, [str], [dict], [dict]), writer: SummaryWriter, update_number: int):
     (
         avatar_total_reward,
         avatar_steps_alive,
         avatar_first_probas,
         episode_end_reasons,
         team_losses_history,
-        update_guidance_status,
+        scheduling_statuses,
     ) = training_history
 
+    # Scheduling values, per team
+    for team, status in enumerate(scheduling_statuses):
+        for var, value in status.items():
+            writer.add_scalar(f'scheduling/{TEAM_NAMES[team]}/{var}', value, update_number)
+
+    # Episode reward, descriptive stats per avatar
     num_avatars = avatar_total_reward.shape[1]
-
-    for var, value in update_guidance_status.items():
-        writer.add_scalar(f'guidance/{var}', value, update_number)
-
     for name, array in [('total-episode-reward', avatar_total_reward), ('episode-steps-alive', avatar_steps_alive)]:
         for avatar_id in range(num_avatars):
             log_descriptive_statistics(array[:, avatar_id], f'{name}/avatar-{avatar_id}/', writer, update_number)
 
+    # End of episode reasons, percentage per iteration
     num_episodes = len(episode_end_reasons)
     for reason in set(episode_end_reasons):
         percentage_of_episodes = episode_end_reasons.count(reason) / num_episodes
         writer.add_scalar(f'end-reason-per/{reason}', percentage_of_episodes, update_number)
 
+    # Probabilities of actions in the first env state, histogram per avatar
     for avatar_id, probas in enumerate(avatar_first_probas.mean(axis=0)):
         writer.add_histogram(f'first-env-state-action-probas/avatar-{avatar_id}', probas, update_number)
 
+    # Losses, descriptive stats and histogram per team
     for team, tlh in enumerate(team_losses_history):
         # Random policies don't have losses to log
         if not tlh:

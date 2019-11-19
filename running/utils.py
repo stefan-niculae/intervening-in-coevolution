@@ -82,8 +82,3 @@ class EpisodeAccumulator:
             return history[:-1]
         else:
             return history
-
-
-def softmax(x: np.array) -> np.array:
-    x = np.exp(x - min(x))
-    return x / sum(x)

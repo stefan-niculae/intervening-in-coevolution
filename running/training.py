@@ -4,9 +4,9 @@ from typing import List
 
 from configs.structure import Config
 from environment.thieves_guardians_env import TGEnv
-from agent.policies import POLICY_CLASSES, Policy
+from agent.policies import POLICY_CLASSES, Policy, softmax
 from agent.storage import RolloutStorage
-from running.utils import EpisodeAccumulator, softmax
+from running.utils import EpisodeAccumulator
 
 
 def instantiate(config: Config) -> (TGEnv, List[Policy], List[RolloutStorage]):
@@ -164,8 +164,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     for storage in avatar_storages:
         storage.reset()
 
-    for policy in team_policies:
-        guidance_status = policy.end_of_update()
+    scheduling_statuses = [policy.after_iteration() for policy in team_policies]
 
     # Ignore last episode since it's most likely unfinished
     return (
@@ -174,5 +173,5 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
         first_step_probas.final_history(drop_last=False),
         end_reasons,
         losses_history,
-        guidance_status,
+        scheduling_statuses,
     )

@@ -7,6 +7,12 @@ from torch.distributions.categorical import Categorical
 
 from configs.structure import Config
 from agent.controllers import CONTROLLER_CLASSES
+from intervening.scheduling import Scheduler, SAMPLE, EXPLORE, SCRIPTED, INVERSE
+
+
+def softmax(x: np.array) -> np.array:
+    x = np.exp(x - min(x))
+    return x / sum(x)
 
 
 class Policy:
@@ -14,27 +20,22 @@ class Policy:
     def __init__(self, config: Config, env_state_shape, num_actions):
         controller_class = CONTROLLER_CLASSES[config.controller]
         self.controller = controller_class(config, env_state_shape, num_actions)
-        self.entropy_coef = config.entropy_coef
-        self.entropy_coef_decay_interval = config.entropy_coef_decay_interval
-        self.entropy_coef_decay_factor = config.entropy_coef_decay_factor
-
-        self.explore_proba = config.explore_proba
-        self.explore_proba_decay_interval = config.explore_proba_decay_interval
-        self.explore_proba_decay_factor = config.explore_proba_decay_factor
-
-        self.update_number = 0
 
         self.max_grad_norm = config.max_grad_norm
         self.all_parameters = list(self.controller.parameters())
 
+        self.scheduler = Scheduler(config)
         self.num_actions = num_actions
-        self.one_fewer_action_probas = np.full(num_actions, 1 / (num_actions - 1))
+        self.entropy_coef = self.scheduler.entropy_coef
 
-    def _create_optimizer(self, config: Config):
-        self.optimizer = torch.optim.Adam(self.all_parameters, lr=config.lr)
-        self.lr_decay = torch.optim.lr_scheduler.StepLR(self.optimizer, config.lr_decay_interval, config.lr_decay_factor)
+    def _create_optimizer(self):
+        self.optimizer = torch.optim.Adam(self.all_parameters, lr=1)  # will be updated by the lr_scheduler
+        self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
+            self.optimizer,
+            lambda _: self.scheduler.lr
+        )
 
-    def pick_action(self, env_state, rec_h, rec_c, deterministic: bool, forced_action: int = None):
+    def pick_action(self, env_state, rec_h, rec_c, deterministic: bool):
         """
         In the given env_state, pick a single action.
         Called during rollouts collection to generate the next action, one by one
@@ -62,23 +63,31 @@ class Policy:
         )
 
         action_distributions = Categorical(logits=actor_logits)  # float tensor of shape [1, num_actions]
-        if forced_action is not None:
-            # Action is pre-computed
-            action = torch.LongTensor([forced_action])
+        if deterministic:
+            action = action_distributions.probs.argmax()
         else:
-            most_likely = action_distributions.probs.argmax()
-            # Explore uniformly (but not the most probable action)
-            if np.random.rand() < self.explore_proba:
-                probas = self.one_fewer_action_probas.copy()
-                probas[most_likely.item()] = 0
-                action = np.random.choice(self.num_actions, p=probas)
-                action = torch.LongTensor([action])
-            elif deterministic:
-                # Pick most probable
-                action = most_likely
-            else:
-                # Sample according to the learned distribution
+            action_source = self.scheduler.action_source
+
+            # Sample according to the learned distribution
+            if action_source == SAMPLE:
                 action = action_distributions.sample()
+
+            # Explore uniformly
+            elif action_source == EXPLORE:
+                action = np.random.choice(self.num_actions)
+
+            # Sample the opposite probabilities
+            elif action_source == INVERSE:
+                p = 1 / softmax(actor_logits.numpy())
+                action = np.random.choice(self.num_actions, p=p / sum(p))
+
+            # Act according to predefined rules
+            elif action_source == SCRIPTED:
+                action = 0  # TODO
+
+        if type(action) is int:
+            action = torch.LongTensor([action])
+
         action_log_prob = action_distributions.log_prob(action)
 
         return (
@@ -134,26 +143,18 @@ class Policy:
         nn.utils.clip_grad_norm_(self.all_parameters, self.max_grad_norm)
         self.optimizer.step()
 
-    def end_of_update(self):
-        self.lr_decay.step(None)
-        self.update_number += 1
-        if self.update_number % self.entropy_coef_decay_interval == 0:
-            self.entropy_coef *= self.entropy_coef_decay_factor
-        if self.update_number % self.explore_proba_decay_interval == 0:
-            self.explore_proba *= self.explore_proba_decay_factor
-
-        return {
-            'lr': self.optimizer.param_groups[0]['lr'],
-            'entropy_coef': self.entropy_coef,
-            'explore_proba': self.explore_proba,
-        }
+    def after_iteration(self) -> dict:
+        self.scheduler.current_update += 1
+        self.lr_scheduler.step(None)
+        self.entropy_coef = self.scheduler.entropy_coef
+        return self.scheduler.current_values
 
 
 class PG(Policy):
     """ Policy Gradient - single actor """
     def __init__(self, config: Config, env_state_shape, num_actions):
         super().__init__(config, env_state_shape, num_actions)
-        self._create_optimizer(config)
+        self._create_optimizer()
 
     def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns) -> {str: float}:
         """

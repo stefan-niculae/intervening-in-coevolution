@@ -34,24 +34,24 @@ def main(config_path: str):
     logs_writer = SummaryWriter(logs_dir)
 
     # Main loop
-    for update_number in progress_bar(range(config.num_updates)):
+    for update_number in progress_bar(range(config.num_iterations)):
         # Collect rollouts and update weights
         training_history = perform_update(config, env, policies, storages)
 
         # Write progress summaries
-        if do_this_iteration(config.log_interval, update_number, config.num_updates):
+        if do_this_iteration(config.log_interval, update_number, config.num_iterations):
             log_layers(policies, logs_writer, update_number)
             log_scalars(training_history, logs_writer, update_number)
 
         # Evaluate and record video
-        if do_this_iteration(config.eval_interval, update_number, config.num_updates):
+        if do_this_iteration(config.eval_interval, update_number, config.num_iterations):
             for deterministic in [True, False]:
                 env_history = evaluate(env, policies, deterministic)
                 suffix = 'deterministic' if deterministic else 'sampling'
                 create_animation(env_history, video_path % (update_number, suffix))
 
         # Checkpoint current model weights
-        if do_this_iteration(config.save_interval, update_number, config.num_updates):
+        if do_this_iteration(config.save_interval, update_number, config.num_iterations):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 torch.save(policies, checkpoint_path % update_number)
