@@ -11,8 +11,8 @@ from intervening.scheduling import Scheduler, SAMPLE, EXPLORE, SCRIPTED, INVERSE
 
 
 def softmax(x: np.array) -> np.array:
-    x = np.exp(x - min(x))
-    return x / sum(x)
+    x = np.exp(x - max(x))
+    return x / (sum(x) + 1e-9)
 
 
 class Policy:
