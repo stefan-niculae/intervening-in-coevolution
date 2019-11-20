@@ -19,6 +19,9 @@ class Config:
     # Whether avatars in each team can move in eight directions, diagonally
     allow_diagonals: List[bool] = (False, True)
 
+    # Whether avatars going past the right edge will end up on the left edge (and all other edges)
+    allow_wraparound: List[bool] = (False, False)
+
     """ Policy """
     # Check agent/policies.py
     algorithm: str = 'pg'  # pg | ppo

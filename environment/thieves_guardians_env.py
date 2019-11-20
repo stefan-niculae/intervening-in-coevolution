@@ -93,6 +93,8 @@ class TGEnv:
         self.num_teams = int(scenario.n_thieves != 0) + int(scenario.n_guardians != 0)
 
         self.state_shape = (5, self._width, self._height)
+        self.allow_wraparound = config.allow_wraparound
+
         self.allow_noops = config.allow_noop
         self.allow_diagonals = config.allow_diagonals
         self.num_actions = [4] * self.num_teams  # by default they can all move in four directions
@@ -232,12 +234,16 @@ class TGEnv:
             old_pos = self._id2pos[avatar_id]
             new_pos = tuple(old_pos + delta)  # NOTE: make sure self.map[pos] the arg is a tuple, not a (2,) array
 
-            # No team can move out of bounds, just ignore the action
+            # Trying to go over the edge
             if not (0 <= new_pos[0] < self._width and 0 <= new_pos[1] < self._height):
-                continue
-            # TODO? (idea): allow screen wrap-around? for only one team?
-            # new_pos[0] %= self.width
-            # new_pos[1] %= self.height
+                # If allowed to wrap around, teleport to the other side of the screen
+                if self.allow_wraparound[team]:
+                    new_pos[0] %= self._width
+                    new_pos[1] %= self._height
+
+                # Otherwise, just ignore the action
+                else:
+                    continue
 
             avatar_team  = self._map[old_pos]  # the character that is currently moving
             new_pos_type = self._map[new_pos]
@@ -253,7 +259,6 @@ class TGEnv:
             # A guardian is trying to step on the treasure, ignore the action
             if avatar_team == GUARDIAN and new_pos_type == TREASURE:
                 continue
-            # TODO? (idea): negative reward if a guardian touches the treasure?
 
             # A thief managed to reach the treasure, the game is over, punish all guardians
             if avatar_team == THIEF and new_pos_type == TREASURE:
@@ -261,7 +266,6 @@ class TGEnv:
                 info['end_reason'] = f'Treasure reached'
 
                 thief_reward, guardian_reward = REWARDS['treasure']
-                #thief_reward *= 5 / self.elapsed_time  # TODO generalize
                 reward[avatar_id] += thief_reward
 
                 # Punish all guardians
