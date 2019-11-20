@@ -7,17 +7,17 @@ from typing import List
 class Config:
     """ Environment """
     # Check environment/scenarios.py for more
-    scenario: str = '4x4-thief-treasure'
+    scenario: str = '4x4,1v1'
 
     # Number of steps after which the guardians win
     # in each step all alive avatars move once
-    time_limit: int = 30
+    time_limit: int = 50
 
     # Whether avatars in each team can chose to do nothing for one timestep
     allow_noop: List[bool] = (False, False)
 
     # Whether avatars in each team can move in eight directions, diagonally
-    allow_diagonals: List[bool] = (False, True)
+    allow_diagonals: List[bool] = (False, False)
 
     # Whether avatars going past the right edge will end up on the left edge (and all other edges)
     allow_wraparound: List[bool] = (False, False)
@@ -34,20 +34,20 @@ class Config:
 
     """ Intervening """
     # Encourage exploration: by optimizing for diversity in action distributions
-    entropy_coef_milestones:   List[int]   = (  0,   20)
-    entropy_coef_values:       List[float] = (.01, .001)
+    entropy_coef_milestones:   List[int]   = (  0,)
+    entropy_coef_values:       List[float] = (.01,)
 
     # Force exploration: sample actions at random
-    uniform_proba_milestones:  List[int]   = (  0,  10, 20)
-    uniform_proba_values:      List[float] = ( .9,  .5,  0)
+    uniform_proba_milestones:  List[int]   = (  0,)
+    uniform_proba_values:      List[float] = ( .9,)
 
     # Don't consult the model in sampling actions, instead follow pre-scripted behavior
-    scripted_proba_milestones: List[int]   = (  0,  20,  30)
-    scripted_proba_values:     List[float] = (  0,  1.,   0)
+    scripted_proba_milestones: List[int]   = (  0,)
+    scripted_proba_values:     List[float] = (  0,)
 
     # Learning rate
-    lr_milestones:             List[int]   = (   0,  10,   40)
-    lr_values:                 List[float] = (.001, .01, .001)
+    lr_milestones:             List[int]   = (   0,)
+    lr_values:                 List[float] = (.001,)
 
     # Inverse
     inverse_proba_milestones:  List[int] = (0,)
@@ -63,7 +63,7 @@ class Config:
 
     activation_function: str = 'relu'  # lrelu | relu | tanh
 
-    num_recurrent_layers: int = 1
+    num_recurrent_layers: int = 0
 
     recurrent_layer_size: int = 16
 
