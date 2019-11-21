@@ -76,6 +76,10 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     next_rec_hs, next_rec_cs = rec_hs, rec_cs
     first_episode_step = True
 
+    # Set to training mode
+    for policy in team_policies:
+        policy.controller.train()
+
     # Collect rollouts
     # TODO (?): collect in parallel
     for step in range(config.num_transitions):

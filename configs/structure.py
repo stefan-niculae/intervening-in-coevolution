@@ -24,13 +24,22 @@ class Config:
 
     """ Policy """
     # Check agent/policies.py
-    algorithm: str = 'pg'  # pg | ppo
+    algorithm: str = 'pg'  # pg | ppo | sac
 
-    # Update clip param
+    # PPO Update clip param
     ppo_clip: float = .2
 
-    # Critic
-    critic_coef: float = .5
+    # PPO Critic coefficient
+    ppo_critic_coef: float = .5
+
+    # SAC target smoothing coefficient
+    sac_tau: float = 5e-3
+
+    # SAC temperature: determines the relative importance of the entropy term against the reward
+    sac_alpha: float = .2
+
+    # Whether to adjust alpha automatically
+    sac_dynamic_alpha: bool = False
 
     """ Intervening """
     # Encourage exploration: by optimizing for diversity in action distributions
@@ -54,18 +63,19 @@ class Config:
     inverse_proba_values:      List[int] = (0.,)
 
     """ Controller """
-    # Controller architecture — check agent/controllers.py
-    controller: str = 'conv'  # fc | conv
-
-    num_hidden_layers: int = 2
-
-    hidden_layer_size: int = 32
+    # Encoder architecture — check agent/controllers.py
+    encoder: str = 'conv'  # fc | conv
 
     activation_function: str = 'relu'  # lrelu | relu | tanh
 
-    num_recurrent_layers: int = 0
+    num_encoder_layers: int = 2
+    encoder_layer_size: int = 32
 
+    num_recurrent_layers: int = 0
     recurrent_layer_size: int = 16
+
+    num_decoder_layers: int = 1
+    decoder_layer_size: int = 32
 
     """ Running """
     # Random seed

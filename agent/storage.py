@@ -15,19 +15,24 @@ class RolloutStorage:
 
         self.num_recurrent_layers = config.num_recurrent_layers
         self.recurrent_layer_size = config.recurrent_layer_size
-        self.controller_recurrent = config.num_recurrent_layers > 0  # assumes homogenous controllers
 
         self.env_states       = torch.empty(config.num_transitions, *env_state_shape, dtype=torch.float32,  requires_grad=False)
         self.actions          = torch.empty(config.num_transitions,                   dtype=torch.float32,  requires_grad=False)  # float32 so it can be filled with nan
         self.action_log_probs = torch.empty(config.num_transitions,                   dtype=torch.float32,  requires_grad=False)
-        self.values           = torch.empty(config.num_transitions + 1,               dtype=torch.float32,  requires_grad=False)
+        if config.algorithm == 'ppo':
+            self.values       = torch.empty(config.num_transitions + 1,               dtype=torch.float32,  requires_grad=False)
+        else:
+            self.values = None
         self.rewards          = torch.empty(config.num_transitions,                   dtype=torch.float32,  requires_grad=False)
         self.dones            = torch.empty(config.num_transitions + 1,               dtype=torch.float32,  requires_grad=False)  # has to be non-boolean to allow multiplication
         self.returns          = torch.empty(config.num_transitions + 1,               dtype=torch.float32,  requires_grad=False)
-        if self.controller_recurrent:
+        if config.num_recurrent_layers > 0:
             # This is the way torch expects hidden state: [num_recurrent_layers, batch_size, recurrent_size]
             self.rec_hs       = torch.empty(config.num_recurrent_layers, config.num_transitions, config.recurrent_layer_size, dtype=torch.float32)
             self.rec_cs       = torch.empty(config.num_recurrent_layers, config.num_transitions, config.recurrent_layer_size, dtype=torch.float32)
+        else:
+            self.rec_hs = None
+            self.rec_cs = None
 
         self.step = None
         self.last_done = None
@@ -50,10 +55,11 @@ class RolloutStorage:
         self.env_states      [self.step] = torch.tensor(env_state,       dtype=torch.float32)
         self.actions         [self.step] = torch.tensor(action,          dtype=torch.float32)
         self.action_log_probs[self.step] = torch.tensor(action_log_prob, dtype=torch.float32)
-        self.values          [self.step] = torch.tensor(value,          dtype=torch.float32)
+        if self.values is not None:
+            self.values      [self.step] = torch.tensor(value,          dtype=torch.float32)
         self.rewards         [self.step] = torch.tensor(reward,          dtype=torch.float32)
         self.dones           [self.step] = torch.tensor(done,            dtype=torch.float32)
-        if self.controller_recurrent:
+        if self.rec_hs is not None:
             self.rec_hs      [:, self.step] = rec_h.view(self.num_recurrent_layers, self.recurrent_layer_size)
             self.rec_cs      [:, self.step] = rec_c.view(self.num_recurrent_layers, self.recurrent_layer_size)
 
@@ -65,11 +71,10 @@ class RolloutStorage:
         self.last_done = None
 
         to_reset = [self.env_states, self.actions, self.action_log_probs, self.values, self.rewards, self.dones, self.returns]
-        if self.controller_recurrent:
-            to_reset += [self.rec_hs, self.rec_cs]
         for tensor in to_reset:
-            # Set to NaN to be able to detect if wrong elements are sampled
-            tensor[:] = np.nan
+            if tensor is not None:
+                # Set to NaN to be able to detect if wrong elements are sampled
+                tensor[:] = np.nan
 
     def compute_returns(self):
         """ Fills out self.returns until the last finished episode """
@@ -114,12 +119,12 @@ class RolloutStorage:
             drop_last=True)
 
         for indices in sampler:
-            if self.controller_recurrent:
-                rec_hs = self.rec_hs[:, indices]
-                rec_cs = self.rec_cs[:, indices]
-            else:
+            if self.rec_hs is None:
                 rec_hs = None
                 rec_cs = None
+            else:
+                rec_hs = self.rec_hs[:, indices]
+                rec_cs = self.rec_cs[:, indices]
             yield (
                 self.env_states[indices],
                 rec_hs,

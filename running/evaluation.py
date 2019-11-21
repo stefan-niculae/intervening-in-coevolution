@@ -27,6 +27,10 @@ def evaluate(env: TGEnv, team_policies: List[Policy], sampling_method: int):
     actions = [0] * env.num_avatars
     action_log_probs = [0] * env.num_avatars
 
+    # Set to evaluation mode
+    for policy in team_policies:
+        policy.controller.eval()
+
     while not all(dones):
         map_history.append(env._map.copy())
         pos2id_history.append(copy(env._pos2id))

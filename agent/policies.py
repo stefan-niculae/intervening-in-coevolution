@@ -1,5 +1,6 @@
 """ Maps env state to action and provides rules on how to update inner controller """
 
+from abc import ABC
 import numpy as np
 import torch
 import torch.nn as nn
@@ -15,20 +16,26 @@ def softmax(x: np.array) -> np.array:
     return x / (sum(x) + 1e-9)
 
 
-class Policy:
+class Policy(ABC):
     """ Abstract class """
     def __init__(self, config: Config, env_state_shape: tuple, num_actions: int):
-        controller_class = CONTROLLER_CLASSES[config.controller]
-        self.controller = controller_class(config, env_state_shape, num_actions)
-
-        self.max_grad_norm = config.max_grad_norm
-        self.all_parameters = list(self.controller.parameters())
-
+        # Scheduler setup
         self.scheduler = Scheduler(config)
+
+        # Controller setup
+        self.controller_class = CONTROLLER_CLASSES[config.encoder]
+        self.controller = None  # will be set by children
+
         self.num_actions = num_actions
         self.entropy_coef = self.scheduler.entropy_coef
 
-    def _create_optimizer(self):
+        # Optimizer setup
+        self.max_grad_norm = config.max_grad_norm
+
+    def _build_optimizer(self):
+        """ must be set by each child after setting self.controller """
+        self.recurrent_controller = self.controller.is_recurrent
+        self.all_parameters = list(self.controller.parameters())
         self.optimizer = torch.optim.Adam(self.all_parameters, lr=1)  # will be updated by the lr_scheduler
         self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
             self.optimizer,
@@ -96,7 +103,7 @@ class Policy:
             action.item(),
             action_log_prob.item(),
             actor_logits,
-            value.item(),
+            None if value is None else value.item(),
             h,
             c,
         )
@@ -142,7 +149,8 @@ class Policy:
 
     def _optimize(self, loss):
         self.optimizer.zero_grad()
-        loss.backward(retain_graph=True)  # retain_graph=True so that backward passes thorugh the same hidden recurrent states work
+        # Retain the graph so that multiple backward passes can be done through the same hidden recurrent states
+        loss.backward(retain_graph=self.recurrent_controller)
         nn.utils.clip_grad_norm_(self.all_parameters, self.max_grad_norm)
         self.optimizer.step()
 
@@ -157,7 +165,9 @@ class PG(Policy):
     """ Policy Gradient - single actor """
     def __init__(self, config: Config, env_state_shape, num_actions):
         super().__init__(config, env_state_shape, num_actions)
-        self._create_optimizer()
+
+        self.controller = self.controller_class(config, env_state_shape, num_actions)
+        self._build_optimizer()
 
     def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns) -> {str: float}:
         """
@@ -183,9 +193,12 @@ class PPO(PG):
     """ Proximal Policy Optimization — actor and critic with max bound on update """
     def __init__(self, config: Config, env_state_shape, num_actions):
         super().__init__(config, env_state_shape, num_actions)
-        self._create_optimizer()
+
+        self.controller = self.controller_class(config, env_state_shape, num_actions)
+        self._build_optimizer()
+
         self.clip_param = config.ppo_clip
-        self.critic_coef = config.critic_coef
+        self.critic_coef = config.ppo_critic_coef
 
     def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns) -> {str: float}:
         """
@@ -219,9 +232,19 @@ class PPO(PG):
         }
 
 
+class SAC(Policy):
+    def __init__(self, config: Config, env_state_shape: tuple, num_actions: int):
+        self.tau = config.sac_tau
+        self.alpha = config.sac_alpha
+        self.dynamic_alpha = config.sac_dynamic_alpha
+        super().__init__(config, env_state_shape, num_actions)
+
+
+
 POLICY_CLASSES = {
-    'pg': PG,
+    'pg':  PG,
     'ppo': PPO,
+    'sac': SAC,
 }
 
 
