@@ -14,7 +14,7 @@ class Config:
 
     # How many treasure collections make the environment end,
     # zero to disable, -1 for all
-    treasure_collection_limit: int = 0
+    treasure_collection_limit: int = -1
 
     # Whether avatars in each team can chose to do nothing for one timestep
     allow_noop: List[bool] = (False, False)

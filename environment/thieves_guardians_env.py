@@ -394,7 +394,7 @@ class TGEnv:
             if self.id2team[id] == opposing_team:
                 opponents[pos] = 1
 
-        treasure_channel = (self._map == TREASURE).astype(int)
+        treasure_channel = (self._map == TREASURE).astype(float)
 
         # Channels first
         return np.stack([own, teammates, opponents, self._walls_channel, treasure_channel])
