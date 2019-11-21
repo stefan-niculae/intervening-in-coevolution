@@ -14,8 +14,9 @@ S = TREASURE
 class Scenario:
     width: int
     height: int
-    n_thieves: int
-    n_guardians: int
+    num_thieves: int
+    num_guardians: int
+    num_treasures: int
     wall_density: float
     fixed_map: np.array
 
@@ -26,6 +27,13 @@ _fixed_scenario_maps = {
         [_, _, _, _],
         [_, _, _, _],
         [_, _, _, S],
+    ],
+
+    '4x4,1v0,2t': [
+        [T, _, _, _],
+        [_, _, _, _],
+        [_, _, _, _],
+        [S, _, _, S],
     ],
 
     '4x4,1v1': [
@@ -94,9 +102,10 @@ def generate_fixed_scenario(name) -> Scenario:
     return Scenario(
         width=map.shape[0],
         height=map.shape[1],
-        n_thieves=np.sum(map == T),
-        n_guardians=np.sum(map == G),
-        wall_density=(map == W).mean(),
+        num_thieves=np.sum(map == THIEF),
+        num_guardians=np.sum(map == GUARDIAN),
+        num_treasures=np.sum(map == TREASURE),
+        wall_density=(map == WALL).mean(),
         fixed_map=map,
     )
 
@@ -105,8 +114,9 @@ random_scenario_configs = {
     's': Scenario(
         width=5,
         height=5,
-        n_thieves=1,
-        n_guardians=1,
+        num_thieves=1,
+        num_guardians=1,
+        num_treasures=1,
         wall_density=0.,
         fixed_map=None,
     ),
@@ -114,8 +124,9 @@ random_scenario_configs = {
     'm': Scenario(
         width=8,
         height=8,
-        n_thieves=2,
-        n_guardians=2,
+        num_thieves=2,
+        num_guardians=2,
+        num_treasures=1,
         wall_density=.0,
         fixed_map=None,
     ),
@@ -123,8 +134,9 @@ random_scenario_configs = {
     'l': Scenario(
         width=12,
         height=12,
-        n_thieves=3,
-        n_guardians=3,
+        num_thieves=3,
+        num_guardians=3,
+        num_treasures=1,
         wall_density=.4,
         fixed_map=None,
     )
@@ -189,11 +201,11 @@ def generate_random_map(scenario_name: str) -> np.array:
     map[treasure_pos] = TREASURE  # TODO walls don't block off objects
 
     # Place the thieves and guardians
-    for avatar_id in range(scenario.n_thieves):
+    for avatar_id in range(scenario.num_thieves):
         x, y = _random_empty_cell(map, quadrant_ranges, thieves_quad)
         map[x, y] = THIEF
 
-    for avatar_id in range(scenario.n_thieves, scenario.n_thieves + scenario.n_guardians):
+    for avatar_id in range(scenario.num_thieves, scenario.num_thieves + scenario.num_guardians):
         x, y = _random_empty_cell(map, quadrant_ranges, guardians_quad)
         map[x, y] = GUARDIAN
 

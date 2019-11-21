@@ -9,9 +9,12 @@ class Config:
     # Check environment/scenarios.py for more
     scenario: str = '4x4,1v1'
 
-    # Number of steps after which the guardians win
-    # in each step all alive avatars move once
+    # Number of steps after which the guardians win: in each step all alive avatars move once
     time_limit: int = 50
+
+    # How many treasure collections make the environment end,
+    # zero to disable, -1 for all
+    treasure_collection_limit: int = 0
 
     # Whether avatars in each team can chose to do nothing for one timestep
     allow_noop: List[bool] = (False, False)
@@ -21,6 +24,9 @@ class Config:
 
     # Whether avatars going past the right edge will end up on the left edge (and all other edges)
     allow_wraparound: List[bool] = (False, False)
+
+    # Whether to just film the scripted behavior
+    viz_scripted_mode: bool = False
 
     """ Policy """
     # Check agent/policies.py

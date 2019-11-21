@@ -6,6 +6,7 @@ from copy import copy
 from environment.thieves_guardians_env import TGEnv, ACTION_IDX2SYMBOL, DEAD
 from agent.policies import Policy
 from running.training import _get_initial_recurrent_state
+from intervening.scheduling import SCRIPTED
 
 
 def evaluate(env: TGEnv, team_policies: List[Policy], sampling_method: int):
@@ -45,6 +46,12 @@ def evaluate(env: TGEnv, team_policies: List[Policy], sampling_method: int):
                 # Chose action based on the policy
                 team = env.id2team[avatar_id]
                 policy = team_policies[team]
+
+                if sampling_method == SCRIPTED:
+                    scripted_action = env.scripted_action(avatar_id)
+                else:
+                    scripted_action = None
+
                 (
                     actions[avatar_id],
                     action_log_probs[avatar_id],
@@ -56,7 +63,8 @@ def evaluate(env: TGEnv, team_policies: List[Policy], sampling_method: int):
                     env_states[avatar_id],
                     rec_hs[avatar_id],
                     rec_cs[avatar_id],
-                    sampling_method=sampling_method
+                    sampling_method=sampling_method,
+                    externally_chosen_action=scripted_action,
                 )
             else:
                 actions[avatar_id] = DEAD

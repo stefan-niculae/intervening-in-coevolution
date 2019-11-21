@@ -13,7 +13,7 @@ from running.visualization import log_layers, log_scalars
 from running.utils import paths, do_this_iteration, save_code
 from environment.visualization import create_animation
 from configs.structure import read_config, save_config
-from intervening.scheduling import SAMPLE, DETERMINISTIC, action_source_names
+from intervening.scheduling import SAMPLE, DETERMINISTIC, SCRIPTED, action_source_names
 
 
 def main(config_path: str):
@@ -32,9 +32,15 @@ def main(config_path: str):
 
     # Instantiate components
     env, policies, storages = instantiate(config)
+
+    if config.viz_scripted_mode:
+        env_history = evaluate(env, policies, SCRIPTED)
+        create_animation(env_history, video_path % (0, 'scripted'))
+        return
+
     logs_writer = SummaryWriter(logs_dir)
 
-    # Main loop
+    # Main training loop
     for update_number in progress_bar(range(config.num_iterations)):
         # Collect rollouts and update weights
         training_history = perform_update(config, env, policies, storages)
@@ -57,7 +63,6 @@ def main(config_path: str):
                 torch.save(policies, checkpoint_path % update_number)
 
     # TODO log final
-
     # Flush logs
     logs_writer.close()
 
