@@ -45,6 +45,7 @@ def evaluate(env: TGEnv, team_policies: List[Policy], sampling_method: int):
                     actions[avatar_id],
                     action_log_probs[avatar_id],
                     _,
+                    _,
                     rec_hs[avatar_id],
                     rec_cs[avatar_id],
                 ) = policy.pick_action(
