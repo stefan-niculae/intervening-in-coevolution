@@ -1,5 +1,5 @@
 {
-  "scenario": "4x4,1v0,2t",
+  "scenario": "6x6,2v2",
   "time_limit": 15,
   "viz_scripted_mode": true,
   "treasure_collection_limit": 1

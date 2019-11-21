@@ -31,7 +31,7 @@ TYPE_NAMES = {
 
 
 PLOT_SIZE = (12, 8)  # in "inches"
-FPS = 1
+FPS = 2
 DPI = 80
 
 

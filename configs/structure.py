@@ -28,6 +28,10 @@ class Config:
     # Whether to just film the scripted behavior
     viz_scripted_mode: bool = False
 
+    # When an avatar reaches their target (treasure/thief),
+    # whether only the avatar (False) or the entire team (True) should get the reward
+    teamwide_rewards: List[bool] = (False, False)
+
     """ Policy """
     # Check agent/policies.py
     algorithm: str = 'pg'  # pg | ppo
