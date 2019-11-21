@@ -13,7 +13,9 @@ Requires Python 3.7. Tested on MacOS and Windows
 
 ## Development
 
-Agent algorithms source: https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail
+Inspiration sources:
+- PG & PPO: https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail
+- GAE: https://github.com/openai/baselines/blob/master/baselines/ppo2/runner.py#L53-L66
 
 - Each team gets their own `Policy`
   - has a `Controller` 

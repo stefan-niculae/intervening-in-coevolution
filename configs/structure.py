@@ -94,6 +94,9 @@ class Config:
     # Max norm of the gradients
     max_grad_norm: float = 5
 
+    # Generalized Advantage Estimation lambda (0 to disable)
+    gae_lambda: float = 0
+
     """ Logging """
     """ Set to 0 to disable, if non-zero, will also do it on the last iteration """
     # After how many updates to update the progress plot
@@ -109,7 +112,12 @@ class Config:
 def read_config(config_path: str) -> Config:
     with open(config_path) as f:
         dict_obj = json.load(f)
-    return Config(**dict_obj)
+    config = Config(**dict_obj)
+
+    if config.gae_lambda > 0:
+        assert config.algorithm != 'pg'  # PG doesn't have a critic to predict values
+
+    return config
 
 
 def save_config(config: Config, save_path: str):

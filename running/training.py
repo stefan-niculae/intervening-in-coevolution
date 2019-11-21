@@ -63,6 +63,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     # Will be filled in for each avatar when stepping the environment individually
     actions          = [0] * env.num_avatars
     action_log_probs = [0] * env.num_avatars
+    values           = [0] * env.num_avatars
 
     avatar_policies = [
         team_policies[env.id2team[avatar_id]]
@@ -98,6 +99,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                     actions[avatar_id],
                     action_log_probs[avatar_id],
                     actor_logits,
+                    values[avatar_id],
                     next_rec_hs[avatar_id],
                     next_rec_cs[avatar_id],
                 ) = policy.pick_action(
@@ -123,6 +125,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                     env_states[avatar_id],
                     actions[avatar_id],
                     action_log_probs[avatar_id],
+                    values[avatar_id],
                     rewards[avatar_id],
                     dones[avatar_id],
                     rec_hs[avatar_id],

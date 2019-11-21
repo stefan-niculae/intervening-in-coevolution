@@ -11,6 +11,7 @@ class RolloutStorage:
         """ Instantiate empty (zero) tensors """
         self.batch_size = config.batch_size
         self.discount = config.discount
+        self.gae_lambda = config.gae_lambda
 
         self.num_recurrent_layers = config.num_recurrent_layers
         self.recurrent_layer_size = config.recurrent_layer_size
@@ -19,8 +20,9 @@ class RolloutStorage:
         self.env_states       = torch.empty(config.num_transitions, *env_state_shape, dtype=torch.float32,  requires_grad=False)
         self.actions          = torch.empty(config.num_transitions,                   dtype=torch.float32,  requires_grad=False)  # float32 so it can be filled with nan
         self.action_log_probs = torch.empty(config.num_transitions,                   dtype=torch.float32,  requires_grad=False)
+        self.values           = torch.empty(config.num_transitions + 1,               dtype=torch.float32,  requires_grad=False)
         self.rewards          = torch.empty(config.num_transitions,                   dtype=torch.float32,  requires_grad=False)
-        self.dones            = torch.empty(config.num_transitions,                   dtype=torch.float32,  requires_grad=False)  # has to be non-boolean to allow multiplication
+        self.dones            = torch.empty(config.num_transitions + 1,               dtype=torch.float32,  requires_grad=False)  # has to be non-boolean to allow multiplication
         self.returns          = torch.empty(config.num_transitions + 1,               dtype=torch.float32,  requires_grad=False)
         if self.controller_recurrent:
             # This is the way torch expects hidden state: [num_recurrent_layers, batch_size, recurrent_size]
@@ -31,7 +33,7 @@ class RolloutStorage:
         self.last_done = None
         self.reset()
 
-    def insert(self, env_state, action, action_log_prob, reward, done, rec_h, rec_c):
+    def insert(self, env_state, action, action_log_prob, value, reward, done, rec_h, rec_c):
         """
         Place at the current step and increment the step counter
 
@@ -39,6 +41,7 @@ class RolloutStorage:
             env_state: array-like of shape env_state_shape
             action: int
             action_log_prob: float
+            value: float
             reward: float
             done: bool
             rec_h: float tensor of shape [num_recurrent_layers, 1, recurrent_layer_size]
@@ -47,6 +50,7 @@ class RolloutStorage:
         self.env_states      [self.step] = torch.tensor(env_state,       dtype=torch.float32)
         self.actions         [self.step] = torch.tensor(action,          dtype=torch.float32)
         self.action_log_probs[self.step] = torch.tensor(action_log_prob, dtype=torch.float32)
+        self.values          [self.step] = torch.tensor(value,          dtype=torch.float32)
         self.rewards         [self.step] = torch.tensor(reward,          dtype=torch.float32)
         self.dones           [self.step] = torch.tensor(done,            dtype=torch.float32)
         if self.controller_recurrent:
@@ -60,7 +64,7 @@ class RolloutStorage:
         self.step = 0
         self.last_done = None
 
-        to_reset = [self.env_states, self.actions, self.action_log_probs, self.rewards, self.dones, self.returns]
+        to_reset = [self.env_states, self.actions, self.action_log_probs, self.values, self.rewards, self.dones, self.returns]
         if self.controller_recurrent:
             to_reset += [self.rec_hs, self.rec_cs]
         for tensor in to_reset:
@@ -70,12 +74,24 @@ class RolloutStorage:
     def compute_returns(self):
         """ Fills out self.returns until the last finished episode """
         self.last_done = (self.dones == 1).nonzero().max()
-        self.returns[self.last_done + 1] = 0.
 
-        # Accumulate discounted returns
-        for step in reversed(range(self.last_done+1)):
-            self.returns[step] = self.returns[step + 1] * self.discount * (1 - self.dones[step]) + self.rewards[step]
-            # TODO (?) GAE
+        # No GAE
+        if self.gae_lambda == 0:
+            # Accumulate discounted returns
+            self.returns[self.last_done + 1] = 0.
+            for t in reversed(range(self.last_done + 1)):
+                self.returns[t] = self.returns[t + 1] * self.discount * (1 - self.dones[t]) + self.rewards[t]
+
+        # Use Generalized Advantage Estimation
+        if self.gae_lambda > 0:
+            self.values[self.last_done + 1] = 0.
+            self.dones [self.last_done + 1] = 1.
+            gae = 0.
+            for t in reversed(range(self.last_done + 1)):
+                future_coef = self.discount * (1 - self.dones[t + 1])
+                delta = self.rewards[t] + future_coef * self.values[t + 1] - self.values[t]
+                gae = delta + future_coef * self.gae_lambda * gae
+                self.returns[t] = gae + self.values[t]
 
     def sample_batches(self):
         """

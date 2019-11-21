@@ -49,13 +49,14 @@ class Policy:
             action: int
             action_log_prob: float
             actor_logits: float tensor of shape [num_actions,]
+            value: float
             rec_h: float tensor of shape [num_recurrent_layers, 1, recurrent_layer_size]
             rec_c: float tensor of shape [num_recurrent_layers, 1, recurrent_layer_size]
         """
         env_state = torch.tensor(env_state, dtype=torch.float32)
 
         # actor_logits: float tensor of shape [batch_size, num_actions]
-        actor_logits, _, h, c = self.controller.forward(
+        actor_logits, value, h, c = self.controller.forward(
             # Set dummy batch sizes of 1
             env_state.view(1, *env_state.shape),
             rec_h,
@@ -95,6 +96,7 @@ class Policy:
             action.item(),
             action_log_prob.item(),
             actor_logits,
+            value.item(),
             h,
             c,
         )

@@ -5,24 +5,33 @@ from configs.structure import Config
 
 
 class TestReturns(unittest.TestCase):
-    def _make_storage(self, reward_seq, done_seq, reset_before_insert=False):
+    def _make_storage(self, reward_seq, done_seq, values_seq=None, gae_lambda=0., discount=.5, reset_before_insert=False):
         config = Config()
         config.num_transitions = len(reward_seq)
-        config.discount = .5
+        config.gae_lambda = gae_lambda
+        config.discount = discount
         storage = RolloutStorage(config, env_state_shape=(1,))
 
         if reset_before_insert:
             storage.reset()
 
-        for r, d in zip(reward_seq, done_seq):
+        if values_seq is None:
+            values_seq = [0.] * len(reward_seq)
+
+        dummy_action = 0
+        dummy_action_log_prob = 0.
+        dummy_env_state = [0]
+
+        for r, d, v in zip(reward_seq, done_seq, values_seq):
             storage.insert(
-                storage.env_states[0],
-                storage.actions[0],
-                storage.action_log_probs[0],
+                dummy_env_state,
+                dummy_action,
+                dummy_action_log_prob,
+                v,
                 r,
                 d,
-                storage.rec_hs[:, 0],
-                storage.rec_cs[:, 0],
+                None,
+                None,
             )
 
         return storage
@@ -93,6 +102,20 @@ class TestReturns(unittest.TestCase):
             list(storage.returns.numpy())[:-1],
         )
 
+    def test_gae(self):
+        storage = self._make_storage(
+            reward_seq=[0, 0, 0, 1],
+            done_seq=[False, False, False, True],
+            # returns .125 .25 .5 1
+            values_seq=[.125, .6, 2, 2],
+            gae_lambda=.1,
+        )
+        storage.compute_returns()
+
+        self.assertEqual(
+            [.25, .5, 1.],
+            list(storage.returns.numpy())[:-1],
+        )
 
 
 if __name__ == '__main__':
