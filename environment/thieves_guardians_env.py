@@ -344,7 +344,6 @@ class TGEnv:
             info['end_reason'] = 'Treasure(s) collected'
 
         self._time_left -= 1
-        print('time left', self._time_left)
         if self._time_left == 0:
             thief_reward, guardian_reward = REWARDS['out_of_time']
             info['end_reason'] = 'Out of time'
