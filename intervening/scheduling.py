@@ -3,11 +3,11 @@ import numpy as np
 
 from configs.structure import Config
 
-SAMPLE        = 0
-UNIFORM       = 1
-SCRIPTED      = 2
-INVERSE       = 3
-DETERMINISTIC = 4
+SAMPLE        = 0  # according to policy
+UNIFORM       = 1  # disregard policy, pick at random
+SCRIPTED      = 2  # externally picked action
+INVERSE       = 3  # sampling according to the exact opposite policy
+DETERMINISTIC = 4  # most probable action in the policy
 
 action_source_names = {
     SAMPLE: 'sample',

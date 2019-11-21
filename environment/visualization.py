@@ -35,6 +35,10 @@ FPS = 1
 DPI = 80
 
 
+for _ in range(2):
+    plt.rcParams.update({'font.size': 25})  # due to a bug this needs to be ran twice
+
+
 def plot_instance(args: tuple):
     ax, cmap, norm, step, map, pos2id, reward, action = args
 
@@ -80,9 +84,6 @@ def create_animation(history: tuple, save_path: str):
     fig.set_tight_layout(True)
     fig.set_size_inches(PLOT_SIZE)
 
-    # Setup sizes
-    plt.rcParams.update({'font.size': 25})  # due to a bug this needs to be ran twice
-
     w, h = maps[0].shape
     # Place the ticks at the middle of each cell
     ax.set_yticks(np.arange(w) + .5, minor=False)
@@ -124,6 +125,9 @@ def create_animation(history: tuple, save_path: str):
 
     # Save the gif
     animation.save(save_path, 'imagemagick', FPS, DPI)
+
+    # Close the figure
+    plt.close(fig)
 
 
 def test():

@@ -366,8 +366,12 @@ class TGEnv:
     def scripted_action(self, avatar_id):
         r, c = self._id2pos[avatar_id]
         team = self.id2team[avatar_id]
+
+        # Thieves' target is a treasure
         if team == THIEF:
             tr, tc = self._thief_target
+
+        # Guardians' target is a thief
         else:
             tr, tc = self._id2pos[self._chased_thief]
 
