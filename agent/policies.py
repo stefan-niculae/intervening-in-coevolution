@@ -232,19 +232,9 @@ class PPO(PG):
         }
 
 
-class SAC(Policy):
-    def __init__(self, config: Config, env_state_shape: tuple, num_actions: int):
-        self.tau = config.sac_tau
-        self.alpha = config.sac_alpha
-        self.dynamic_alpha = config.sac_dynamic_alpha
-        super().__init__(config, env_state_shape, num_actions)
-
-
-
 POLICY_CLASSES = {
     'pg':  PG,
     'ppo': PPO,
-    'sac': SAC,
 }
 
 

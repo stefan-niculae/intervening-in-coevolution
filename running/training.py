@@ -133,7 +133,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                     rewards[avatar_id],
                     dones[avatar_id],
                     rec_hs[avatar_id],
-                    rec_cs[avatar_id]
+                    rec_cs[avatar_id],
                 )
 
         total_rewards.current += rewards

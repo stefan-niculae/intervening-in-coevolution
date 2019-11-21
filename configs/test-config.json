@@ -18,7 +18,7 @@
   "entropy_coef_values":       [0.01],
 
   "uniform_proba_milestones":  [ 0],
-  "uniform_proba_values":      [ 1],
+  "uniform_proba_values":      [ 0],
 
   "scripted_proba_milestones": [  0],
   "scripted_proba_values":     [  0],

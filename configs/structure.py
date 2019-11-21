@@ -24,22 +24,13 @@ class Config:
 
     """ Policy """
     # Check agent/policies.py
-    algorithm: str = 'pg'  # pg | ppo | sac
+    algorithm: str = 'pg'  # pg | ppo
 
     # PPO Update clip param
     ppo_clip: float = .2
 
     # PPO Critic coefficient
     ppo_critic_coef: float = .5
-
-    # SAC target smoothing coefficient
-    sac_tau: float = 5e-3
-
-    # SAC temperature: determines the relative importance of the entropy term against the reward
-    sac_alpha: float = .2
-
-    # Whether to adjust alpha automatically
-    sac_dynamic_alpha: bool = False
 
     """ Intervening """
     # Encourage exploration: by optimizing for diversity in action distributions
@@ -125,7 +116,7 @@ def read_config(config_path: str) -> Config:
     config = Config(**dict_obj)
 
     if config.gae_lambda > 0:
-        assert config.algorithm != 'pg'  # PG doesn't have a critic to predict values
+        assert config.algorithm == 'ppo', "Only PPO has a value network"
 
     return config
 

@@ -19,7 +19,7 @@ class RolloutStorage:
         self.env_states       = torch.empty(config.num_transitions, *env_state_shape, dtype=torch.float32,  requires_grad=False)
         self.actions          = torch.empty(config.num_transitions,                   dtype=torch.float32,  requires_grad=False)  # float32 so it can be filled with nan
         self.action_log_probs = torch.empty(config.num_transitions,                   dtype=torch.float32,  requires_grad=False)
-        if config.algorithm == 'ppo':
+        if config.gae_lambda > 0:
             self.values       = torch.empty(config.num_transitions + 1,               dtype=torch.float32,  requires_grad=False)
         else:
             self.values = None
