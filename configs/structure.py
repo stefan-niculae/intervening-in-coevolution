@@ -22,6 +22,8 @@ class Config:
     # Whether avatars going past the right edge will end up on the left edge (and all other edges)
     allow_wraparound: List[bool] = (False, False)
 
+    state_representation: str = 'grid'  # grid | coordinates
+
     """ Policy """
     # Check agent/policies.py
     algorithm: str = 'pg'  # pg | ppo | sac
@@ -125,7 +127,10 @@ def read_config(config_path: str) -> Config:
     config = Config(**dict_obj)
 
     if config.gae_lambda > 0:
-        assert config.algorithm != 'pg'  # PG doesn't have a critic to predict values
+        assert config.algorithm == 'ppo',  'GAE defined only for PPO'
+
+    if config.algorithm == 'sac' and config.state_representation == 'grid':
+        print('Warning: SAC used with grid state representation.')
 
     return config
 

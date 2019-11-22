@@ -58,6 +58,8 @@ REWARDS = {
     'treasure':    ( +1,   0),
 }
 
+DEAD_COORDS = (-1, -1)
+
 
 def _coords_where(grid: np.array):
     """ A position (x, y) of an arbitrary one in the grid """
@@ -90,9 +92,16 @@ class TGEnv:
 
         self.id2team = np.array([THIEF] * scenario.n_thieves + [GUARDIAN] * scenario.n_guardians)
         self.num_avatars = scenario.n_thieves + scenario.n_guardians
+        self.num_walls = scenario.num_walls
+        self.num_treasures = scenario.num_treasures
         self.num_teams = int(scenario.n_thieves != 0) + int(scenario.n_guardians != 0)
 
-        self.state_shape = (5, self._width, self._height)
+        self._state_representation = config.state_representation
+        if self._state_representation == 'grid':
+            self.state_shape = (5, self._width, self._height)
+        elif self._state_representation == 'coordinates':
+            num_objects = self.num_avatars + self.num_treasures + self.num_walls
+            self.state_shape = (num_objects, 2)  # x and y for each
         self.allow_wraparound = config.allow_wraparound
 
         self.allow_noops = config.allow_noop
@@ -127,7 +136,7 @@ class TGEnv:
         self._reset_map()
         self.avatar_alive = np.ones(self.num_avatars, bool)
 
-        return [self._compute_state(i) for i in range(self.num_avatars)]
+        return self._compute_state()
 
     def _reset_map(self):
         """ Place wall pieces randomly, and then the treasure, thieves and guardians in different quadrants """
@@ -140,6 +149,11 @@ class TGEnv:
         # Precompute treasure and wall channels since they're static
         self._treasure_channel = (self._map == TREASURE).astype(int)
         self._walls_channel    = (self._map == WALL)    .astype(int)
+
+        xs, ys = np.where(self._walls_channel)
+        self._wall_positions = list(zip(xs, ys))
+        xs, ys = np.where(self._treasure_channel)
+        self._treasures_positions = list(zip(xs, ys))
 
         # Set avatar position bidirectional caches (first thieves then guardians)
         xs_t, ys_t = np.where(self._map == THIEF)
@@ -324,27 +338,30 @@ class TGEnv:
                 if team == THIEF:
                     reward[avatar_id] += thief_reward
 
-        state = [self._compute_state(i) for i in range(self.num_avatars)]
-
         # Update for next step: alive if alive before and not done
         self.avatar_alive &= ~done
+        print(self._compute_state())
+        return self._compute_state(), reward, done, info
 
-        return state, reward, done, info
+    def _compute_state(self):
+        if self._state_representation == 'grid':
+            f = self._compute_grid_state
+        else:
+            f = self._compute_coordinates_state
+        return [
+            f(i) if alive else None
+            for i, alive in enumerate(self.avatar_alive)
+        ]
 
-    def _compute_state(self, for_id):
+    def _compute_grid_state(self, for_id):
         """
         Five channels, each of size width by height, each cell having values 0 or 1
             1. own position
             2. teammate(s)
-            3. opposing team
+            3. opponent(s)
             4. walls
-            5. treasure
-
-        None if the avatar is dead
+            5. treasure(s)
         """
-        if not self.avatar_alive[for_id]:
-            return None
-
         own_pos  = self._id2pos[for_id]
         own_team = self.id2team[for_id]
         opposing_team = GUARDIAN if own_team == THIEF else THIEF
@@ -362,6 +379,51 @@ class TGEnv:
 
         # Channels first
         return np.stack([own, teammates, opponents, self._walls_channel, self._treasure_channel])
+
+    def _compute_coordinates_state(self, for_id):
+        """
+        List of coordinates (x, y):
+            1. own position
+            2. teammate(s)
+            3. opponent(s)
+            4. walls
+            5. treasure(s)
+
+        # TODO if we want to use the same network on multiple scenarios, or want to use Transformers, a third component would need to be added (x, y, object_kind_identifier)\
+        """
+        own_team = self.id2team[for_id]
+        teammates = []
+        opponents = []
+        for id, alive in enumerate(self.avatar_alive):
+            if id == for_id:
+                continue
+            if self.id2team[id] == own_team:
+                team_list = teammates
+            else:
+                team_list = opponents
+            if alive:
+                team_list.append(self._id2pos[id])
+            else:
+                team_list.append(DEAD_COORDS)
+
+        coords = np.array([
+            self._id2pos[for_id],  # own positions
+
+            # Sorting folds the state space by always showing avatars closer to a corner first
+            # with no side effects since all avatars in a team are equivalent to each-other
+            *sorted(teammates, reverse=True),  # but place deads ones last
+            *sorted(opponents, reverse=True),
+
+            *self._wall_positions,
+            *self._treasures_positions,  # TODO adapt to multiple treasures with DEAD as well
+        ], float)
+
+        # Scale into [0, 1] range
+        coords /= [self._width - 1, self._height - 1]
+        # to scale into [-1, +1] range: ((coords / [self._width - 1, self._height - 1]) * 2) - 1
+        coords[coords < 0] = -1  # reset scaling on the dead state (-1)
+
+        return coords
 
     def scripted_action(self, avatar_id):
         r, c = self._id2pos[avatar_id]
