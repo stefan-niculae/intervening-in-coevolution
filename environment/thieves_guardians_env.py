@@ -52,7 +52,7 @@ action_idx2delta[DOWN_LEFT]  = action_idx2delta[DOWN] + action_idx2delta[LEFT]
 
 # (thief reward, guardian reward)
 REWARDS = {
-    'killed':      (  -.1,  +1),
+    'killed':      (  0,  +1),
     'out_of_time': (  0,   0),
     'time':        (  0,   0),
     'treasure':    ( +1,   0),

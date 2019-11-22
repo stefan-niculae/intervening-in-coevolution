@@ -39,7 +39,7 @@ class Policy(ABC):
         self.optimizer = torch.optim.Adam(self.all_parameters, lr=1)  # will be updated by the lr_scheduler
         self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
             self.optimizer,
-            lambda _: self.scheduler.lr
+            lambda _: self.scheduler.lr()
         )
 
     def pick_action(self, env_state, rec_h, rec_c, sampling_method: int, externally_chosen_action:int = None):

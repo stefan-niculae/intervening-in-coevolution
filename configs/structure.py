@@ -59,6 +59,9 @@ class Config:
     lr_milestones:             List[int]   = (   0,)
     lr_values:                 List[float] = (.001,)
 
+    # Winning rate threshold to stop learning
+    win_rate_threshold = 1
+
     # Inverse
     inverse_proba_milestones:  List[int] = (0,)
     inverse_proba_values:      List[int] = (0.,)

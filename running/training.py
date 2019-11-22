@@ -163,6 +163,16 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     for storage in avatar_storages:
         storage.compute_returns()
 
+    team_idx = {team: [] for team in range(env.num_teams)}
+    for avatar_id in range(env.num_avatars):
+        team_idx[env.id2team[avatar_id]] += [avatar_id]
+    win_rate = {}
+    rewards = total_rewards.final_history(drop_last=True).sum(axis=0)
+    for team in team_idx:
+        win_rate[team] = rewards[team_idx[team]].sum() / rewards.sum()
+    for team, policy in enumerate(team_policies):
+        policy.scheduler.report_progress(win_rate[team])
+
     # Update policies
     losses_history = [[] for _ in range(env.num_teams)]
     for epoch in range(config.num_epochs):

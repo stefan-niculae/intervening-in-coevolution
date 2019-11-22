@@ -49,10 +49,17 @@ class Scheduler:
         self.sample_proba = np.maximum(0, self.sample_proba)
 
         self.current_update = 0
+        self.progress_history = []
+        self.win_rate_threshold = config.win_rate_threshold
 
-    @property
+    def report_progress(self, winrate: float):
+        self.progress_history.append(winrate)
+
     def lr(self) -> float:
-        return self.lrs[self.current_update]
+        if self.progress_history and self.progress_history[-1] > self.win_rate_threshold:
+            return 0
+        else:
+            return self.lrs[self.current_update]
 
     @property
     def entropy_coef(self) -> float:
