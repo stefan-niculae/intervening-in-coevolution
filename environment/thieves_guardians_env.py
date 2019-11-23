@@ -1,6 +1,6 @@
 """ Custom environment """
 import numpy as np
-
+from queue import Queue
 from configs.structure import Config
 
 
@@ -486,26 +486,51 @@ class TGEnv:
         r, c = self._id2pos[avatar_id]
         team = self.id2team[avatar_id]
 
-        # Thieves' target is a treasure
-        if team == THIEF:
-            if self._chased_treasure_pos is None:
-                print(f'Warning: thief #{avatar_id} trying to chase a treasure, but there are none left.'
-                      f'Defaulting to UP ({UP}).')
-                return UP
-            tr, tc = self._chased_treasure_pos
 
-        # Guardians' target is a thief
-        else:
-            tr, tc = self._id2pos[self._chased_thief_id]
-
-        if tr > r:
-            return DOWN
-        if tr < r:
+        #Implementing BFS
+        parents = {}
+        last_action = {}
+        parents[(r, c)] = -1
+        queue = Queue()
+        queue.put((r, c))
+        complete = False
+        actions = range(8) if self._allow_diagonals[team] else range(4)
+        while not queue.empty() and not complete:
+            r1, c1 = queue.get()
+            for action in actions:
+                r2, c2 = r1 + action_idx2delta[action][0], c1 + action_idx2delta[action][1]
+                if 0 <= r2 < self._height and 0 <= c2 < self._width and not self._walls_channel[r2][c2] and (r2, c2) not in parents:
+                    if (team == 0 and self._map[r2][c2] == TREASURE) or \
+                            (team == 1 and (r2, c2) in self._pos2id and self.id2team[self._pos2id[(r2, c2)]] == 0):
+                        parents[(r2, c2)] = (r1, c1)
+                        last_action[(r2, c2)] = action
+                        complete = True
+                        break
+                    #for thieves check that the position is not a guardian or is not adjacent to a guardian
+                    blocked = False
+                    if team == 0:
+                        for i in range(self._num_thieves, self.num_avatars):
+                            dx = abs(self._id2pos[i][0] - r2)
+                            dy = abs(self._id2pos[i][1] - c2)
+                            if self._allow_diagonals[team] and max(dx,dy) <= 1:
+                                blocked = True
+                                break
+                            elif not self._allow_diagonals[team] and dx+dy <= 1:
+                                blocked = True
+                                break
+                    if not(team == 0 and blocked):
+                        parents[(r2, c2)] = (r1, c1)
+                        last_action[(r2, c2)] = action
+                        queue.put((r2, c2))
+        if not complete:
+            #If we can not reach any objective go Up
             return UP
-        if tc > c:
-            return RIGHT
-        if tc < c:
-            return LEFT
+
+            # Backtracking
+        last = (r2, c2)
+        while parents[last] != (r, c):
+            last = parents[last]
+        return last_action[last]
 
         print(f'Warning: could not pick action for avatar #{avatar_id}, of team {team}'
               f'(current pos = ({r}, {c}), target pos = ({tr}, {tc}).'

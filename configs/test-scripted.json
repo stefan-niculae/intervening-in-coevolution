@@ -1,5 +1,5 @@
 {
-  "scenario": "6x6,2v2",
+  "scenario": "13x13,2v2,pacman-2",
   "time_limit": 15,
   "viz_scripted_mode": true,
   "treasure_collection_limit": 1
