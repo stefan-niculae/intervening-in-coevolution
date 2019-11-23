@@ -401,7 +401,7 @@ class TGEnv:
             if alive:
                 team_list.append(self._id2pos[id])
             else:
-                team_list.append(DEAD_COORDS)
+                team_list.append((-1, -1))
 
         coords = np.array([
             self._id2pos[for_id],  # own positions

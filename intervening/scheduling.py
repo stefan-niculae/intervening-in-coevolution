@@ -85,7 +85,7 @@ class Scheduler:
             for i, p in enumerate(self._normalized_action_source_probas())
         }
         return {
-            'lr':            self.lr,
+            'lr':            self.lr(),
             'entropy_coef':  self.entropy_coef,
             **probas
         }

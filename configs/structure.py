@@ -25,6 +25,9 @@ class Config:
     # Whether avatars going past the right edge will end up on the left edge (and all other edges)
     allow_wraparound: List[bool] = (False, False)
 
+    # How the environment outputs states
+    state_representation: str = 'coordinates'  # grid | coordinates
+
     """ Policy """
     # Check agent/policies.py
     algorithm: str = 'pg'  # pg | ppo
@@ -62,7 +65,7 @@ class Config:
     lr_values:                 List[float] = (.001,)
 
     # Winning rate threshold to stop learning
-    win_rate_threshold = 1
+    win_rate_threshold: float = 1
 
     # Inverse
     inverse_proba_milestones:  List[int] = (0,)
@@ -70,7 +73,7 @@ class Config:
 
     """ Controller """
     # Encoder architecture — check agent/controllers.py
-    encoder: str = 'conv'  # fc | conv
+    encoder: str = 'fc'  # fc | conv
 
     activation_function: str = 'relu'  # lrelu | relu | tanh
 
@@ -124,6 +127,9 @@ class Config:
     # After how many updates to film a rollout
     eval_interval: int = 5
 
+    # Whether to just visualize the scripted behavior, no training
+    viz_scripted_mode: bool = False
+
 
 def read_config(config_path: str) -> Config:
     with open(config_path) as f:
@@ -135,6 +141,9 @@ def read_config(config_path: str) -> Config:
 
     if config.algorithm == 'sac' and config.state_representation == 'grid':
         print('Warning: SAC used with grid state representation.')
+
+    if config.state_representation == 'coordinates':
+        assert config.encoder != 'conv', 'Convolution cannot be used on a list of coordinates'
 
     return config
 

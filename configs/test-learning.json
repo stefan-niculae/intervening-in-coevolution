@@ -1,20 +1,20 @@
 {
   "scenario": "6x6,2v2",
   "time_limit": 100,
-  "allow_noop": [true, true],
-  "allow_diagonals": [false, false],
+
+  "state_representation": "coordinates",
 
   "algorithm": "pg",
-  "encoder": "conv",
+  "encoder": "fc",
 
-  "encoder_layer_size": 64,
-  "num_encoder_layers": 3,
-  "activation_function": "relu",
+  "encoder_layer_size": 32,
+  "num_encoder_layers": 2,
+  "activation_function": "tanh",
 
   "num_iterations": 50,
-  "num_transitions": 4000,
-  "batch_size": 512,
-  "num_epochs": 2,
+  "num_transitions": 2000,
+  "batch_size": 256,
+  "num_epochs": 5,
 
   "entropy_coef_milestones":   [   0],
   "entropy_coef_values":       [0.01],
