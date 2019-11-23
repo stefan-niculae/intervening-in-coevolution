@@ -58,6 +58,12 @@ REWARDS = {
     'treasure':    ( +1,   0),
 }
 
+WINNING_REASONS = {
+    THIEF: 'Treasure(s) collected',
+    GUARDIAN: 'All thieves caught',
+    None: 'Out of time',
+}
+
 
 def _coords_where(grid: np.array):
     """ A position (x, y) of an arbitrary one in the grid """
@@ -369,17 +375,17 @@ class TGEnv:
         # No more thieves alive, the game is over (thieves and guardians have been rewarded at the moments of killing)
         if self._num_remaining_thieves == 0:
             done[:] = True
-            info['end_reason'] = 'All thieves dead'
+            info['end_reason'] = WINNING_REASONS[GUARDIAN]  # guardians won
 
         # Zero disables episode end when treasures are collected
         if self._treasure_collection_limit != 0 and self._num_treasures_to_collect == 0:
             done[:] = True
-            info['end_reason'] = 'Treasure(s) collected'
+            info['end_reason'] = WINNING_REASONS[THIEF]  # thieves won
 
         self._time_left -= 1
         if self._time_left == 0:
             thief_reward, guardian_reward = REWARDS['out_of_time']
-            info['end_reason'] = 'Out of time'
+            info['end_reason'] = WINNING_REASONS[None]
             done[:] = True
             # Apply reward to all avatars alive
             for id in self._iterate_avatars_alive():
