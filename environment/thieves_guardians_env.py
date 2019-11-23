@@ -58,6 +58,8 @@ REWARDS = {
     'treasure':    ( +1,   0),
 }
 
+DEAD_COORDS = (-1, -1)
+
 
 def _coords_where(grid: np.array):
     """ A position (x, y) of an arbitrary one in the grid """
@@ -82,64 +84,51 @@ class TGEnv:
             from environment.scenarios import generate_fixed_scenario
             scenario = generate_fixed_scenario(self.scenario_name)
 
-        # Scenario map
+        self.time_limit = config.time_limit
+
         self._width = scenario.width
         self._height = scenario.height
         self._fixed_original_map = scenario.fixed_map
 
-        self.id2team = np.array([THIEF] * scenario.num_thieves + [GUARDIAN] * scenario.num_guardians)
-        self.num_avatars = scenario.num_thieves + scenario.num_guardians
-        self.num_teams = int(scenario.num_thieves != 0) + int(scenario.num_guardians != 0)
+        self.id2team = np.array([THIEF] * scenario.n_thieves + [GUARDIAN] * scenario.n_guardians)
+        self.num_avatars = scenario.n_thieves + scenario.n_guardians
+        self.num_walls = scenario.num_walls
+        self.num_treasures = scenario.num_treasures
+        self.num_teams = int(scenario.n_thieves != 0) + int(scenario.n_guardians != 0)
 
-        self.state_shape = (5, self._width, self._height)
+        self._state_representation = config.state_representation
+        if self._state_representation == 'grid':
+            self.state_shape = (5, self._width, self._height)
+        elif self._state_representation == 'coordinates':
+            num_objects = self.num_avatars + self.num_treasures + self.num_walls
+            self.state_shape = (num_objects, 2)  # x and y for each
+        self.allow_wraparound = config.allow_wraparound
 
-        self._allow_wraparound = config.allow_wraparound
-        self._allow_noops = config.allow_noop
-        self._allow_diagonals = config.allow_diagonals
+        self.allow_noops = config.allow_noop
+        self.allow_diagonals = config.allow_diagonals
         self.num_actions = [4] * self.num_teams  # by default they can all move in four directions
-        for team, (noop, diagonals) in enumerate(zip(self._allow_noops, self._allow_diagonals)):
+        for team, (noop, diagonals) in enumerate(zip(self.allow_noops, self.allow_diagonals)):
             if noop:
                 self.num_actions[team] += 1
             if diagonals:
                 self.num_actions[team] += 4
 
-        self._teamwide_rewards = config.teamwide_rewards
-
-        # Episode end variables
-        self._num_thieves = scenario.num_thieves
+        self._num_thieves = scenario.n_thieves
+        self.elapsed_time = None
         self._num_remaining_thieves = None
-
-        self._num_treasures = scenario.num_treasures
-        if config.treasure_collection_limit == -1:
-            self._treasure_collection_limit = self._num_treasures
-        else:
-            self._treasure_collection_limit = config.treasure_collection_limit
-        self._num_treasures_to_collect = None
-
-        self._time_left = None
-        self._time_limit = config.time_limit
-
-        # Avatar statuses variables
         self.avatar_alive = None
         self._map = None
         self._id2pos = None
         self._pos2id = None
-
-        # Precomputed channels
         self._walls_channel = None
-
-        # Action scripting
-        self._chased_thief_id = None
-        self._chased_treasure_pos = None
-
-        # Assign values to volatile variables
+        self._treasure_channel = None
+        self._chased_thief = None
+        self._thief_target = None
         self.reset()
 
     def reset(self):
-        # Will be decremented when appropriate
-        self._time_left = self._time_limit
+        self.elapsed_time = 0
         self._num_remaining_thieves = self._num_thieves
-        self._num_treasures_to_collect = self._treasure_collection_limit
 
         self._id2pos = {}
         self._pos2id = {}
@@ -147,7 +136,7 @@ class TGEnv:
         self._reset_map()
         self.avatar_alive = np.ones(self.num_avatars, bool)
 
-        return [self._compute_state(i) for i in range(self.num_avatars)]
+        return self._compute_state()
 
     def _reset_map(self):
         """ Place wall pieces randomly, and then the treasure, thieves and guardians in different quadrants """
@@ -158,7 +147,13 @@ class TGEnv:
             self._map = generate_random_map(self.scenario_name)
 
         # Precompute treasure and wall channels since they're static
+        self._treasure_channel = (self._map == TREASURE).astype(int)
         self._walls_channel    = (self._map == WALL)    .astype(int)
+
+        xs, ys = np.where(self._walls_channel)
+        self._wall_positions = list(zip(xs, ys))
+        xs, ys = np.where(self._treasure_channel)
+        self._treasures_positions = list(zip(xs, ys))
 
         # Set avatar position bidirectional caches (first thieves then guardians)
         xs_t, ys_t = np.where(self._map == THIEF)
@@ -169,8 +164,8 @@ class TGEnv:
             self._id2pos[avatar_id] = x, y
             self._pos2id[(x, y)] = avatar_id
 
-        self._chased_treasure_pos = _coords_where(self._map == TREASURE)
-        self._chased_thief_id = 0
+        self._thief_target = _coords_where(self._treasure_channel)
+        self._chased_thief = 0
 
     def _move_or_kill(self, avatar_id, avatar_team, old_pos, new_pos=None):
         self._map[old_pos] = EMPTY
@@ -180,33 +175,19 @@ class TGEnv:
         if new_pos is None:
             assert avatar_team == THIEF
             self._num_remaining_thieves -= 1
-            # del self._id2pos[avatar_id]  # TODO keep all these variables in sync of movement and deaths (with numpy masks?)
 
             # Find a new target for the guardians: the first thief that is not alive
-            if avatar_id == self._chased_thief_id:
-                if self._num_remaining_thieves > 0:
-                    for thief_id in range(self._num_thieves):
-                        if self.avatar_alive[thief_id]:
-                            self._chased_thief_id = thief_id
-                            break
-                else:
-                    self._chased_thief_id = None
+            if avatar_id == self._chased_thief and self._num_remaining_thieves > 0:
+                for thief_id in range(self._num_thieves):
+                    if self.avatar_alive[thief_id]:
+                        self._chased_thief = thief_id
+                        break
 
         # When moved to a new valid position
         else:
-            # Decrement amount of treasures left to be collected
-            collected_treasure = (self._map[new_pos] == TREASURE)
-
             self._map[new_pos] = avatar_team
             self._id2pos[avatar_id] = new_pos
             self._pos2id[new_pos] = avatar_id
-
-            if collected_treasure:
-                self._num_treasures_to_collect -= 1
-                if self._num_treasures_to_collect > 0:
-                    self._chased_treasure_pos = _coords_where(self._map == TREASURE)
-                else:
-                    self._chased_treasure_pos = None
 
     def _interpret_action(self, action_idx: int, team: int):
         """
@@ -218,8 +199,8 @@ class TGEnv:
         if action_idx < 4:
             return action_idx
 
-        noops = self._allow_noops[team]
-        diags = self._allow_diagonals[team]
+        noops = self.allow_noops[team]
+        diags = self.allow_diagonals[team]
         assert noops or diags
 
         if noops and not diags:
@@ -233,24 +214,6 @@ class TGEnv:
         if noops and diags:
             assert action_idx < 9
             return action_idx
-
-    def _iterate_avatars_alive(self, team=None):
-        for id in range(self.num_avatars):
-            if self.avatar_alive[id] and (team is None or self.id2team[id] == team):
-                yield id
-
-    def _rewards_mask(self, avatar_id) -> np.array:
-        """ either to just the avatar or the entire team  """
-        team = self.id2team[avatar_id]
-        mask = np.zeros(self.num_avatars, bool)
-
-        if not self._teamwide_rewards[team]:
-            mask[avatar_id] = True
-        else:
-            for id in self._iterate_avatars_alive(team=team):
-                mask[id] = True
-
-        return mask
 
     def step(self, actions: [int]):
         """
@@ -271,7 +234,10 @@ class TGEnv:
         done   = np.zeros(self.num_avatars, bool)
         reward = np.zeros(self.num_avatars, float)
 
-        for avatar_id in self._iterate_avatars_alive():
+        for avatar_id in range(self.num_avatars):
+            if not self.avatar_alive[avatar_id]:
+                continue
+
             # Apply every-timestep reward
             team = self.id2team[avatar_id]
             reward[avatar_id] += REWARDS['time'][team]
@@ -285,7 +251,7 @@ class TGEnv:
             # Trying to go over the edge
             if not (0 <= new_pos[0] < self._width and 0 <= new_pos[1] < self._height):
                 # If allowed to wrap around, teleport to the other side of the screen
-                if self._allow_wraparound[team]:
+                if self.allow_wraparound[team]:
                     new_pos[0] %= self._width
                     new_pos[1] %= self._height
 
@@ -308,16 +274,18 @@ class TGEnv:
             if avatar_team == GUARDIAN and new_pos_type == TREASURE:
                 continue
 
-            # A thief managed to reach a treasure
+            # A thief managed to reach the treasure, the game is over, punish all guardians
             if avatar_team == THIEF and new_pos_type == TREASURE:
-                self._move_or_kill(avatar_id, avatar_team, old_pos, new_pos)
+                done[:] = True
+                info['end_reason'] = f'Treasure reached'
 
                 thief_reward, guardian_reward = REWARDS['treasure']
-                reward[self._rewards_mask(avatar_id)] += thief_reward
+                reward[avatar_id] += thief_reward
 
                 # Punish all guardians
-                for id in self._iterate_avatars_alive(team=GUARDIAN):
-                    reward[id] += guardian_reward
+                for avatar_id in range(self.num_avatars):
+                    if self.id2team[avatar_id] == GUARDIAN:
+                        reward[avatar_id] += guardian_reward
                 continue
 
             # Any team can move freely to an empty cell
@@ -333,8 +301,8 @@ class TGEnv:
                 self._move_or_kill(avatar_id, THIEF, old_pos)
                 done[avatar_id] = True
 
-                reward[self._rewards_mask(avatar_id)]   += thief_reward
-                reward[self._rewards_mask(guardian_id)] += guardian_reward
+                reward[avatar_id]   += thief_reward
+                reward[guardian_id] += guardian_reward
                 continue
 
             # A guardian managed to catch a thief, kill the thief and apply rewards
@@ -346,73 +314,115 @@ class TGEnv:
 
                 self._move_or_kill(avatar_id, GUARDIAN, old_pos, new_pos)
 
-                reward[self._rewards_mask(thief_id)]  += thief_reward
-                reward[self._rewards_mask(avatar_id)] += guardian_reward
+                reward[thief_id]  += thief_reward
+                reward[avatar_id] += guardian_reward
                 continue
 
         # No more thieves alive, the game is over (thieves and guardians have been rewarded at the moments of killing)
         if self._num_remaining_thieves == 0:
-            done[:] = True
             info['end_reason'] = 'All thieves dead'
-
-        # Zero disables episode end when treasures are collected
-        if self._treasure_collection_limit != 0 and self._num_treasures_to_collect == 0:
             done[:] = True
-            info['end_reason'] = 'Treasure(s) collected'
 
-        self._time_left -= 1
-        if self._time_left == 0:
+        self.elapsed_time += 1
+        if self.elapsed_time == self.time_limit:
             thief_reward, guardian_reward = REWARDS['out_of_time']
             info['end_reason'] = 'Out of time'
             done[:] = True
             # Apply reward to all avatars alive
-            for id in self._iterate_avatars_alive():
-                team = self.id2team[id]
+            for avatar_id in range(self.num_avatars):
+                if not self.avatar_alive[avatar_id]:
+                    continue
+                team = self.id2team[avatar_id]
                 if team == GUARDIAN:
-                    reward[id] += guardian_reward
+                    reward[avatar_id] += guardian_reward
                 if team == THIEF:
-                    reward[id] += thief_reward
-
-        state = [self._compute_state(i) for i in range(self.num_avatars)]
+                    reward[avatar_id] += thief_reward
 
         # Update for next step: alive if alive before and not done
         self.avatar_alive &= ~done
+        return self._compute_state(), reward, done, info
 
-        return state, reward, done, info
+    def _compute_state(self):
+        if self._state_representation == 'grid':
+            f = self._compute_grid_state
+        else:
+            f = self._compute_coordinates_state
+        return [
+            f(i) if alive else None
+            for i, alive in enumerate(self.avatar_alive)
+        ]
 
-    def _compute_state(self, for_id):
+    def _compute_grid_state(self, for_id):
         """
         Five channels, each of size width by height, each cell having values 0 or 1
             1. own position
             2. teammate(s)
-            3. opposing team
+            3. opponent(s)
             4. walls
-            5. treasure
-
-        None if the avatar is dead
+            5. treasure(s)
         """
-        if not self.avatar_alive[for_id]:
-            return None
-
         own_pos  = self._id2pos[for_id]
         own_team = self.id2team[for_id]
+        opposing_team = GUARDIAN if own_team == THIEF else THIEF
 
         own = np.zeros_like(self._map, float)
         own[own_pos] = 1
 
-        thieves   = (self._map == THIEF   ).astype(float)
-        guardians = (self._map == GUARDIAN).astype(float)
-        if own_team == THIEF:
-            teammates = thieves
-            opponents = guardians
-        else:
-            teammates = guardians
-            opponents = thieves
-
-        treasure_channel = (self._map == TREASURE).astype(float)
+        teammates = np.zeros_like(self._map, float)
+        opponents = np.zeros_like(self._map, float)
+        for pos, id in self._pos2id.items():
+            if self.id2team[id] == own_team:
+                teammates[pos] = 1
+            if self.id2team[id] == opposing_team:
+                opponents[pos] = 1
 
         # Channels first
-        return np.stack([own, teammates, opponents, self._walls_channel, treasure_channel])
+        return np.stack([own, teammates, opponents, self._walls_channel, self._treasure_channel])
+
+    def _compute_coordinates_state(self, for_id):
+        """
+        List of coordinates (x, y):
+            1. own position
+            2. teammate(s)
+            3. opponent(s)
+            4. walls
+            5. treasure(s)
+
+        # TODO if we want to use the same network on multiple scenarios, or want to use Transformers, a third component would need to be added (x, y, object_kind_identifier)\
+        """
+        own_team = self.id2team[for_id]
+        teammates = []
+        opponents = []
+        for id, alive in enumerate(self.avatar_alive):
+            if id == for_id:
+                continue
+            if self.id2team[id] == own_team:
+                team_list = teammates
+            else:
+                team_list = opponents
+            if alive:
+                team_list.append(self._id2pos[id])
+            else:
+                team_list.append(DEAD_COORDS)
+
+        coords = np.array([
+            self._id2pos[for_id],  # own positions
+
+            # Sorting folds the state space by always showing avatars closer to a corner first
+            # with no side effects since all avatars in a team are equivalent to each-other
+            *sorted(teammates, reverse=True),  # but place deads ones last
+            *sorted(opponents, reverse=True),
+
+            *self._wall_positions,
+            *self._treasures_positions,  # TODO adapt to multiple treasures with DEAD as well
+        ], float)
+
+        # Scale into [0, 1] range
+        coords /= [self._width - 1, self._height - 1]
+        # to scale into [-1, +1] range: ((coords / [self._width - 1, self._height - 1]) * 2) - 1
+        coords[coords < 0] = -1  # reset scaling on the dead state (-1)
+
+        return coords
 
     def scripted_action(self, avatar_id):
         r, c = self._id2pos[avatar_id]
@@ -420,15 +430,11 @@ class TGEnv:
 
         # Thieves' target is a treasure
         if team == THIEF:
-            if self._chased_treasure_pos is None:
-                print(f'Warning: thief #{avatar_id} trying to chase a treasure, but there are none left.'
-                      f'Defaulting to UP ({UP}).')
-                return UP
-            tr, tc = self._chased_treasure_pos
+            tr, tc = self._thief_target
 
         # Guardians' target is a thief
         else:
-            tr, tc = self._id2pos[self._chased_thief_id]
+            tr, tc = self._id2pos[self._chased_thief]
 
         if tr > r:
             return DOWN
