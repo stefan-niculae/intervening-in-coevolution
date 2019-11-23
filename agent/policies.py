@@ -27,7 +27,7 @@ class Policy(ABC):
         self.controller = None  # will be set by children
 
         self.num_actions = num_actions
-        self.entropy_coef = self.scheduler.entropy_coef
+        self.entropy_coef = self.scheduler.get_current_entropy_coef()
 
         # Optimizer setup
         self.max_grad_norm = config.max_grad_norm
@@ -36,11 +36,7 @@ class Policy(ABC):
         """ must be set by each child after setting self.controller """
         self.recurrent_controller = self.controller.is_recurrent
         self.all_parameters = list(self.controller.parameters())
-        self.optimizer = torch.optim.Adam(self.all_parameters, lr=1)  # will be updated by the lr_scheduler
-        self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
-            self.optimizer,
-            lambda _: self.scheduler.lr()
-        )
+        self.optimizer = torch.optim.Adam(self.all_parameters, lr=self.scheduler.get_current_lr())
 
     def pick_action(self, env_state, rec_h, rec_c, sampling_method: int, externally_chosen_action:int = None):
         """
@@ -156,8 +152,9 @@ class Policy(ABC):
 
     def after_iteration(self) -> dict:
         self.scheduler.current_update += 1
-        self.lr_scheduler.step(None)
-        self.entropy_coef = self.scheduler.entropy_coef
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = self.scheduler.get_current_lr()
+        self.entropy_coef = self.scheduler.get_current_entropy_coef()
         return self.scheduler.current_values
 
 

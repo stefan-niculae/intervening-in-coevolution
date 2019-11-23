@@ -55,14 +55,13 @@ class Scheduler:
     def report_progress(self, winrate: float):
         self.progress_history.append(winrate)
 
-    def lr(self) -> float:
+    def get_current_lr(self) -> float:
         if self.progress_history and self.progress_history[-1] > self.win_rate_threshold:
             return 0
         else:
             return self.lrs[self.current_update]
 
-    @property
-    def entropy_coef(self) -> float:
+    def get_current_entropy_coef(self) -> float:
         return self.entropy_coefs[self.current_update]
 
     def _normalized_action_source_probas(self) -> np.array:
@@ -85,8 +84,8 @@ class Scheduler:
             for i, p in enumerate(self._normalized_action_source_probas())
         }
         return {
-            'lr':            self.lr(),
-            'entropy_coef':  self.entropy_coef,
+            'lr':            self.get_current_lr(),
+            'entropy_coef':  self.get_current_entropy_coef(),
             **probas
         }
 
