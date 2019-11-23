@@ -8,7 +8,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 from environment.thieves_guardians_env import TGEnv, THIEF, GUARDIAN, WINNING_REASONS
-from intervening.scheduling import SAMPLE
+from intervening.scheduling import SAMPLE, SCRIPTED
 from running.evaluation import simulate_episode
 
 
@@ -24,14 +24,20 @@ def play_all_pairs(env: TGEnv, all_policies, model_names: [str], num_episodes=10
 
     n = len(thief_policies)
     rows = []
-    for i in range(n):
-        for j in range(i, n):
+    for i in range(n + 1):
+        for j in range(i, n + 1):
+            # Add an extra thief and an extra guardian, that are acting in a scripted way
             policies = [
-                thief_policies[i],
-                guardian_policies[j]
+                thief_policies[min(i, n-1)],
+                guardian_policies[min(i, n-1)]
             ]
             for episode_number in range(num_episodes):
-                _, _, cumulative_rewards_history, _, end_reason = simulate_episode(env, policies, SAMPLE)
+                sample_policies = [
+                    SAMPLE if i < n else SCRIPTED,
+                    SAMPLE if j < n else SCRIPTED,
+                ]
+
+                _, _, cumulative_rewards_history, _, end_reason = simulate_episode(env, policies, sample_policies)
 
                 total_rewards = cumulative_rewards_history[-1]
                 thieves_reward   = total_rewards[env.team_masks[THIEF]].sum()
@@ -39,8 +45,8 @@ def play_all_pairs(env: TGEnv, all_policies, model_names: [str], num_episodes=10
 
                 for (t, g) in [(i, j), (j, i)]:
                     rows.append((
-                        model_names[t],
-                        model_names[g],
+                        model_names[t] if t < n else 'scripted',
+                        model_names[g] if g < n else 'scripted',
                         episode_number,
                         thieves_reward,
                         guardians_reward,

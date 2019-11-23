@@ -9,7 +9,13 @@ from running.training import _get_initial_recurrent_state
 from intervening.scheduling import SCRIPTED
 
 
-def simulate_episode(env: TGEnv, team_policies: List[Policy], sampling_method: int):
+def simulate_episode(env: TGEnv, team_policies: List[Policy], sampling_method):
+    """
+    sampling_method: either one int or one for each team
+    """
+    if type(sampling_method) is int:
+        sampling_method = [sampling_method] * env.num_teams
+
     map_history     = []
     pos2id_history  = []
     rewards_history = []
@@ -47,7 +53,7 @@ def simulate_episode(env: TGEnv, team_policies: List[Policy], sampling_method: i
                 team = env.id2team[avatar_id]
                 policy = team_policies[team]
 
-                if sampling_method == SCRIPTED:
+                if sampling_method[team] == SCRIPTED:
                     scripted_action = env.scripted_action(avatar_id)
                 else:
                     scripted_action = None
@@ -63,7 +69,7 @@ def simulate_episode(env: TGEnv, team_policies: List[Policy], sampling_method: i
                     env_states[avatar_id],
                     rec_hs[avatar_id],
                     rec_cs[avatar_id],
-                    sampling_method=sampling_method,
+                    sampling_method=sampling_method[team],
                     externally_chosen_action=scripted_action,
                 )
             else:
