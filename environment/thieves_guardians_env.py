@@ -58,8 +58,6 @@ REWARDS = {
     'treasure':    ( +1,   0),
 }
 
-DEAD_COORDS = (-1, -1)
-
 
 def _coords_where(grid: np.array):
     """ A position (x, y) of an arbitrary one in the grid """

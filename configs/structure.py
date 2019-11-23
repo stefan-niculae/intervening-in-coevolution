@@ -25,13 +25,6 @@ class Config:
     # Whether avatars going past the right edge will end up on the left edge (and all other edges)
     allow_wraparound: List[bool] = (False, False)
 
-    # Whether to just film the scripted behavior
-    viz_scripted_mode: bool = False
-
-    # When an avatar reaches their target (treasure/thief),
-    # whether only the avatar (False) or the entire team (True) should get the reward
-    teamwide_rewards: List[bool] = (False, False)
-
     """ Policy """
     # Check agent/policies.py
     algorithm: str = 'pg'  # pg | ppo
@@ -41,6 +34,15 @@ class Config:
 
     # PPO Critic coefficient
     ppo_critic_coef: float = .5
+
+    # SAC target smoothing coefficient
+    sac_tau: float = 5e-3
+
+    # SAC temperature: determines the relative importance of the entropy term against the reward
+    sac_alpha: float = .2
+
+    # Whether to adjust alpha automatically
+    sac_dynamic_alpha: bool = False
 
     """ Intervening """
     # Encourage exploration: by optimizing for diversity in action distributions
@@ -129,7 +131,10 @@ def read_config(config_path: str) -> Config:
     config = Config(**dict_obj)
 
     if config.gae_lambda > 0:
-        assert config.algorithm == 'ppo', "Only PPO has a value network"
+        assert config.algorithm == 'ppo',  'GAE defined only for PPO'
+
+    if config.algorithm == 'sac' and config.state_representation == 'grid':
+        print('Warning: SAC used with grid state representation.')
 
     return config
 

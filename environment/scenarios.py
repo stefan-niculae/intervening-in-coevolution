@@ -14,10 +14,10 @@ S = TREASURE
 class Scenario:
     width: int
     height: int
-    num_thieves: int
-    num_guardians: int
+    n_thieves: int
+    n_guardians: int
     num_treasures: int
-    wall_density: float
+    num_walls: int
     fixed_map: np.array
 
 
@@ -102,10 +102,10 @@ def generate_fixed_scenario(name) -> Scenario:
     return Scenario(
         width=map.shape[0],
         height=map.shape[1],
-        num_thieves=np.sum(map == THIEF),
-        num_guardians=np.sum(map == GUARDIAN),
+        n_thieves=np.sum(map == T),
+        n_guardians=np.sum(map == G),
+        num_walls=np.sum(map == WALL),
         num_treasures=np.sum(map == TREASURE),
-        wall_density=(map == WALL).mean(),
         fixed_map=map,
     )
 
@@ -114,30 +114,30 @@ random_scenario_configs = {
     's': Scenario(
         width=5,
         height=5,
-        num_thieves=1,
-        num_guardians=1,
+        n_thieves=1,
+        n_guardians=1,
+        num_walls=0,
         num_treasures=1,
-        wall_density=0.,
         fixed_map=None,
     ),
 
     'm': Scenario(
         width=8,
         height=8,
-        num_thieves=2,
-        num_guardians=2,
-        num_treasures=1,
-        wall_density=.0,
+        n_thieves=2,
+        n_guardians=2,
+        num_walls=5,
+        num_treasures=2,
         fixed_map=None,
     ),
 
     'l': Scenario(
         width=12,
         height=12,
-        num_thieves=3,
-        num_guardians=3,
-        num_treasures=1,
-        wall_density=.4,
+        n_thieves=3,
+        n_guardians=3,
+        num_walls=25,
+        num_treasures=3,
         fixed_map=None,
     )
 }
@@ -190,22 +190,25 @@ def generate_random_map(scenario_name: str) -> np.array:
     map = np.full((scenario.width, scenario.height), EMPTY)
 
     # Place walls
-    wall_mask = np.random.rand(scenario.width, scenario.height) < scenario.wall_density
-    map[wall_mask] = WALL
+    wall_xs = np.arange(scenario.width,  size=scenario.num_walls)
+    wall_ys = np.arange(scenario.height, size=scenario.num_walls)
+    map[wall_xs, wall_ys] = WALL
+    # TODO check that a path exists between thieves/guardians/treasures
 
     # Pick areas for the teams and treasure
-    thieves_quad, guardians_quad, treasure_quad = np.random.choice(4, size=3, replace=False)
+    thieves_quad, guardians_quad, treasures_quad = np.random.choice(4, size=3, replace=False)
 
-    # Place treasure
-    treasure_pos = _random_empty_cell(map, quadrant_ranges, treasure_quad)
-    map[treasure_pos] = TREASURE  # TODO walls don't block off objects
+    # Place treasures
+    for _ in range(scenario.num_treasures):
+        treasure_pos = _random_empty_cell(map, quadrant_ranges, treasures_quad)
+        map[treasure_pos] = TREASURE
 
     # Place the thieves and guardians
-    for avatar_id in range(scenario.num_thieves):
+    for avatar_id in range(scenario.n_thieves):
         x, y = _random_empty_cell(map, quadrant_ranges, thieves_quad)
         map[x, y] = THIEF
 
-    for avatar_id in range(scenario.num_thieves, scenario.num_thieves + scenario.num_guardians):
+    for avatar_id in range(scenario.n_thieves, scenario.n_thieves + scenario.n_guardians):
         x, y = _random_empty_cell(map, quadrant_ranges, guardians_quad)
         map[x, y] = GUARDIAN
 

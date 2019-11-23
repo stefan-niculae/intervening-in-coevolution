@@ -9,6 +9,8 @@
   "num_recurrent_layers": 0,
   "num_encoder_layers": 1,
 
+  "state_representation": "coordinates",
+
   "num_iterations": 3,
   "num_transitions": 22,
   "batch_size": 10,
