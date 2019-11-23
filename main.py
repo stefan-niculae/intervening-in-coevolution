@@ -8,11 +8,12 @@ from tqdm import tqdm as progress_bar
 
 from running.training import instantiate, perform_update
 from running.evaluation import simulate_episode
-from running.visualization import log_layers, log_scalars
+from running.visualization import log_layers, log_scalars, log_comparisons
 from running.utils import paths, do_this_iteration, save_code, save_model
 from environment.visualization import create_animation
 from configs.structure import read_config, save_config
 from intervening.scheduling import SAMPLE, DETERMINISTIC, SCRIPTED, action_source_names
+from tuning.comparison import read_models, play_against_others
 
 
 def main(config_path: str):
@@ -39,11 +40,15 @@ def main(config_path: str):
 
     logs_writer = SummaryWriter(logs_dir)
 
+    if config.compare_interval > 0:
+        comparison_policies, _ = read_models(config.comparison_models_dir)
+
     try:
         # Main training loop
         for update_number in progress_bar(range(config.num_iterations), 'Training'):
             # Collect rollouts and update weights
             training_history = perform_update(config, env, policies, storages)
+
 
             # Write progress summaries
             if do_this_iteration(config.log_interval, update_number, config.num_iterations):
@@ -59,6 +64,12 @@ def main(config_path: str):
             # Checkpoint current model weights
             if do_this_iteration(config.save_interval, update_number, config.num_iterations):
                 save_model(policies, checkpoint_path % update_number)
+
+            # Evaluate against other models
+            if do_this_iteration(config.compare_interval, update_number, config.num_iterations):
+                won_statuses, rewards = play_against_others(env, policies, comparison_policies, config.comparison_num_episodes)
+                log_comparisons(won_statuses, rewards, logs_writer, update_number)
+
     except KeyboardInterrupt:
         print('Stopped training, saving model...')
         if config.save_interval > 0:

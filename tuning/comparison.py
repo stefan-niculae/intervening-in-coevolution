@@ -2,7 +2,9 @@
 
 from os import listdir
 from pathlib import Path
+
 import torch
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -19,6 +21,32 @@ def read_models(models_dir='comparison_models'):
     return all_policies, model_files
 
 
+def play_against_others(env: TGEnv, candidate_policies, other_policies, num_episodes: int):
+    candidate_thieves, candidate_guardians = candidate_policies
+    num_matches = num_episodes * len(other_policies)
+    won_statuses = np.zeros((env.num_teams, num_matches))
+    rewards      = np.zeros((env.num_teams, num_matches))  # unscaled, raw
+
+    for (other_thieves, other_guardians) in other_policies:
+        for episode_number in range(num_episodes):
+            for team_idx in range(2):
+                if team_idx == 0:
+                    # Test the candidate thieves
+                    policies = [candidate_thieves, other_guardians]
+                else:
+                    # Test the candidate guardians
+                    policies = [other_thieves, candidate_guardians]
+
+                _, _, cumulative_rewards_history, _, end_reason = simulate_episode(env, policies, SAMPLE)
+                accumulated_avatar_rewards = cumulative_rewards_history[-1]
+                accumulated_team_rewards   = accumulated_avatar_rewards[env.team_masks[team_idx]]
+
+                won_statuses[team_idx, episode_number] = (end_reason == WINNING_REASONS[THIEF])
+                rewards     [team_idx, episode_number] = accumulated_team_rewards.sum()
+
+    return won_statuses, rewards
+
+
 def play_all_pairs(env: TGEnv, all_policies, model_names: [str], num_episodes=10) -> pd.DataFrame:
     thief_policies, guardian_policies = zip(*all_policies)
 
@@ -28,7 +56,7 @@ def play_all_pairs(env: TGEnv, all_policies, model_names: [str], num_episodes=10
         for j in range(i, n + 1):
             # Add an extra thief and an extra guardian, that are acting in a scripted way
             policies = [
-                thief_policies[min(i, n-1)],
+                thief_policies   [min(i, n-1)],
                 guardian_policies[min(i, n-1)]
             ]
             for episode_number in range(num_episodes):
@@ -86,13 +114,17 @@ def compute_team_results(all_results, team: str, measure: str, normalize=False):
     return team_results
 
 
-def plot_team_aggregates(all_results: pd.DataFrame, team: str) -> pd.DataFrame.style:
+def _compute_aggregates(all_results: pd.DataFrame, team: str):
     team_rewards = compute_team_results(all_results, team, 'reward', normalize=True)
     avg_rewards = team_rewards.mean(axis=0)
     winrate     = compute_team_results(all_results, team, 'won').mean(axis=0)  # times won/times played; the average
+    return team_rewards, avg_rewards, winrate
 
+
+def plot_team_aggregates(all_results: pd.DataFrame, team: str) -> pd.DataFrame.style:
+    team_rewards, avg_rewards, winrate = _compute_aggregates(all_results, team)
     team_aggregates = pd.DataFrame([avg_rewards, winrate], index=['avg_rewards', 'winrate']).T\
-        .sort_values(by='avg_rewards',ascending=False)\
+        .sort_values(by='avg_rewards', ascending=False)\
         .style.bar(color='lightblue').set_precision(2)
     return team_aggregates, team_rewards, avg_rewards.index
 

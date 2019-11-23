@@ -122,14 +122,19 @@ class Config:
 
     """ Logging """
     """ Set to 0 to disable, if non-zero, will also do it on the last iteration """
-    # After how many updates to update the progress plot
+    # Every how many iterations to update the progress plot
     log_interval: int = 1
 
-    # After how many updates to save the model
+    # Every how many iterations to save the model
     save_interval: int = 999
 
-    # After how many updates to film a rollout
+    # Every how many iterations to film a rollout
     eval_interval: int = 5
+
+    # Every how many iterations to compare against other models
+    compare_interval: int = 0
+    comparison_models_dir: str = 'tuning/comparison_models'
+    comparison_num_episodes: int = 5
 
     # Whether to just visualize the scripted behavior, no training
     viz_scripted_mode: bool = False

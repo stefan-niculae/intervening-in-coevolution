@@ -5,9 +5,10 @@ from torch.utils.tensorboard import SummaryWriter
 
 from agent.policies import Policy
 from environment.thieves_guardians_env import TEAM_NAMES, TGEnv
+from tuning.comparison import play_all_pairs, _compute_aggregates
 
 
-DESCRIPTIVE_STATS = ['mean', 'max']  # any combination of ['min', 'mean', 'std', 'max']
+DESCRIPTIVE_STATS = ['mean', 'max', 'std']  # any combination of ['min', 'mean', 'std', 'max']
 
 
 def log_layers(team_policies: List[Policy], writer: SummaryWriter, update_number: int):
@@ -19,7 +20,7 @@ def log_layers(team_policies: List[Policy], writer: SummaryWriter, update_number
                 writer.add_histogram(f'grads/policy/{layer_name}', layer_params.grad, update_number)
 
 
-def log_descriptive_statistics(array: np.array, prefix: str, writer, update_number: int,  axis=0):
+def log_descriptive_statistics(prefix: str, array: np.array, update_number: int, writer, axis=0):
     """ Min, max, std avg """
     for op in DESCRIPTIVE_STATS:
         writer.add_scalar(
@@ -49,12 +50,14 @@ def log_scalars(training_history: (np.array, np.array, np.array, [str], [dict], 
     for name, array in [('total-episode-reward', avatar_total_reward), ('episode-steps-alive', avatar_steps_alive)]:
         for avatar_id in range(num_avatars):
             team = env.id2team[avatar_id]
-            log_descriptive_statistics(array[:, avatar_id], f'{name}/{TEAM_NAMES[team]}-{avatar_id}/', writer, update_number)
+            log_descriptive_statistics(f'{name}/{TEAM_NAMES[team]}-{avatar_id}/', array[:, avatar_id], update_number, writer)
 
     # Aggregates of rewards and episode length per team
     for team_name, team_mask in zip(TEAM_NAMES, env.team_masks):
-        log_descriptive_statistics(avatar_total_reward[:, team_mask].sum(axis=1), f'total-episode-reward/{team_name}s-sum/',     writer, update_number)
-        log_descriptive_statistics(avatar_steps_alive [:, team_mask].mean(axis=1), f'episode-steps-alive/{team_name}s-average/', writer, update_number)
+        log_descriptive_statistics(f'total-episode-reward/{team_name}s-sum/', avatar_total_reward[:, team_mask].sum(axis=1),
+                                   update_number, writer)
+        log_descriptive_statistics(f'episode-steps-alive/{team_name}s-average/', avatar_steps_alive[:, team_mask].mean(axis=1),
+                                   update_number, writer)
 
     # End of episode reasons, percentage per iteration
     num_episodes = len(episode_end_reasons)
@@ -83,5 +86,12 @@ def log_scalars(training_history: (np.array, np.array, np.array, [str], [dict], 
                 transposed[name][i] = value
 
         for loss_name, values in transposed.items():
-            log_descriptive_statistics(values, f'loss/{TEAM_NAMES[team]}/{loss_name}/', writer, update_number)
+            log_descriptive_statistics(f'loss/{TEAM_NAMES[team]}/{loss_name}/', values, update_number, writer)
             writer.add_histogram(f'loss/{TEAM_NAMES[team]}/{loss_name}', values, update_number)
+
+
+def log_comparisons(won_statuses, team_rewards, writer: SummaryWriter, update_number: int):
+    for won, rew, team_name in zip(won_statuses, team_rewards, TEAM_NAMES):
+        writer.add_scalar         (f'external_comparisons/{team_name}/winrate',  won.mean(), update_number)
+        log_descriptive_statistics(f'external_comparisons/{team_name}/rewards/', rew,        update_number, writer)
+        writer.add_histogram      (f'external_comparisons/{team_name}/rewards',  rew,        update_number)
