@@ -1,3 +1,5 @@
+from time import time
+from dataclasses import asdict
 import numpy as np
 
 from typing import List
@@ -5,7 +7,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from agent.policies import Policy
 from environment.thieves_guardians_env import TEAM_NAMES, TGEnv
-from tuning.comparison import play_all_pairs, _compute_aggregates
+from configs.structure import Config
 
 
 DESCRIPTIVE_STATS = ['mean', 'max', 'std']  # any combination of ['min', 'mean', 'std', 'max']
@@ -90,8 +92,39 @@ def log_scalars(training_history: (np.array, np.array, np.array, [str], [dict], 
             writer.add_histogram(f'loss/{TEAM_NAMES[team]}/{loss_name}', values, update_number)
 
 
-def log_comparisons(won_statuses, team_rewards, writer: SummaryWriter, update_number: int):
+def log_comparisons(won_statuses: [[bool], [bool]], team_rewards: [[float], [float]], writer: SummaryWriter, update_number: int):
     for won, rew, team_name in zip(won_statuses, team_rewards, TEAM_NAMES):
         writer.add_scalar         (f'external_comparisons/{team_name}/winrate',  won.mean(), update_number)
         log_descriptive_statistics(f'external_comparisons/{team_name}/rewards/', rew,        update_number, writer)
         writer.add_histogram      (f'external_comparisons/{team_name}/rewards',  rew,        update_number)
+
+
+def log_hyperparams_and_metrics(config: Config,
+                                selves_wons: [[bool], [bool]], selves_rewards: [[float], [float]],
+                                others_wons: [[bool], [bool]], others_rewards: [[float], [float]],
+                                writer: SummaryWriter, start_time: float):
+
+    metrics = {
+        'run_time': time() - start_time
+    }
+    for team_idx, team_name in enumerate(TEAM_NAMES):
+        metrics    [f'{team_name}s-winrate-against_training_opponents'] = selves_wons[team_idx].mean()
+        if others_wons is not None:
+            metrics[f'{team_name}s-winrate-against_external_opponents'] = others_wons[team_idx].mean()
+
+        for op in DESCRIPTIVE_STATS:
+            metrics[f'{team_name}s-reward_{op}-against_training_opponents'] = getattr(selves_rewards, op)()
+            if others_rewards is not None:
+                metrics[f'{team_name}s-winrate-against_external_opponents'] = getattr(others_rewards, op)()
+
+    # Tensorboard only accepts int, float, str, bool, or torch.Tensor
+    # So we turn lists into their string representation, rightfully treating them as categorical values (if more than one item)
+    hyperparams = asdict(config)
+    for k, v in hyperparams.items():
+        if type(v) not in [int, float, str, bool]:
+            if len(v) == 1:
+                hyperparams[k] = v[0]
+            else:
+                hyperparams[k] = str(v)
+
+    writer.add_hparams(hyperparams, metrics)

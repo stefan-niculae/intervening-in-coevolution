@@ -1,5 +1,6 @@
 """ Orchestrates I/O and learning """
 
+from time import time
 from sys import argv
 
 import torch
@@ -8,7 +9,7 @@ from tqdm import tqdm as progress_bar
 
 from running.training import instantiate, perform_update
 from running.evaluation import simulate_episode
-from running.visualization import log_layers, log_scalars, log_comparisons
+from running.visualization import log_layers, log_scalars, log_comparisons, log_hyperparams_and_metrics
 from running.utils import paths, do_this_iteration, save_code, save_model
 from environment.visualization import create_animation
 from configs.structure import read_config, save_config
@@ -44,11 +45,12 @@ def main(config_path: str):
         comparison_policies, _ = read_models(config.comparison_models_dir)
 
     try:
+        start_time = time()
+
         # Main training loop
         for update_number in progress_bar(range(config.num_iterations), 'Training'):
             # Collect rollouts and update weights
             training_history = perform_update(config, env, policies, storages)
-
 
             # Write progress summaries
             if do_this_iteration(config.log_interval, update_number, config.num_iterations):
@@ -71,9 +73,22 @@ def main(config_path: str):
                 log_comparisons(won_statuses, rewards, logs_writer, update_number)
 
     except KeyboardInterrupt:
-        print('Stopped training, saving model...')
+        print('Stopped training, finishing up...')
+
+        # Save final weights
         if config.save_interval > 0:
             save_model(policies, checkpoint_path % update_number)
+
+        # Save hyperparams and metrics (comparisons against others and themselves)
+        selves_wons, selves_rewards     = play_against_others(env, policies, [policies],          config.comparison_num_episodes)
+        if config.compare_interval > 0:
+            others_wons, others_rewards = play_against_others(env, policies, comparison_policies, config.comparison_num_episodes)
+        else:
+            others_wons, others_rewards = None, None
+        log_hyperparams_and_metrics(config,
+                                    selves_wons, selves_rewards,
+                                    others_wons, others_rewards,
+                                    logs_writer, start_time)
 
     # TODO log final
     # Flush logs

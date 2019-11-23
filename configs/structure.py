@@ -134,6 +134,8 @@ class Config:
     # Every how many iterations to compare against other models
     compare_interval: int = 0
     comparison_models_dir: str = 'tuning/comparison_models'
+
+    # How many matches to play against external opponents or themselves (at the end of training)
     comparison_num_episodes: int = 5
 
     # Whether to just visualize the scripted behavior, no training
