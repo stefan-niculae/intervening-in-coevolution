@@ -7,7 +7,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm as progress_bar
 
 from running.training import instantiate, perform_update
-from running.evaluation import evaluate
+from running.evaluation import simulate_episode
 from running.visualization import log_layers, log_scalars
 from running.utils import paths, do_this_iteration, save_code, save_model
 from environment.visualization import create_animation
@@ -33,7 +33,7 @@ def main(config_path: str):
     env, policies, storages = instantiate(config)
 
     if config.viz_scripted_mode:
-        env_history = evaluate(env, policies, SCRIPTED)
+        [*env_history, end_reason] = simulate_episode(env, policies, SCRIPTED)
         create_animation(env_history, video_path % (0, 'scripted'))
         return
 
@@ -53,7 +53,7 @@ def main(config_path: str):
             # Evaluate and record video
             if do_this_iteration(config.eval_interval, update_number, config.num_iterations):
                 for sampling_method in [SAMPLE, DETERMINISTIC]:
-                    env_history = evaluate(env, policies, sampling_method)
+                    [*env_history, end_reason] = simulate_episode(env, policies, sampling_method)
                     create_animation(env_history, video_path % (update_number, action_source_names[sampling_method]))
 
             # Checkpoint current model weights
@@ -62,7 +62,7 @@ def main(config_path: str):
     except KeyboardInterrupt:
         print('Stopped training, saving model...')
         if config.save_interval > 0:
-            save_model(policies, checkpoint_path % update_number + ' final')
+            save_model(policies, checkpoint_path % update_number)
 
     # TODO log final
     # Flush logs

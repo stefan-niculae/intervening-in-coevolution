@@ -28,9 +28,13 @@ class Config:
     # How the environment outputs states
     state_representation: str = 'coordinates'  # grid | coordinates
 
+    # When an avatar reaches their target (treasure/thief),
+    # whether only the avatar (False) or the entire team (True) should get the reward
+    teamwide_rewards: List[bool] = (False, False)
+
     """ Policy """
     # Check agent/policies.py
-    algorithm: str = 'pg'  # pg | ppo
+    algorithm: str = 'pg'  # pg | ppo | sac
 
     # PPO Update clip param
     ppo_clip: float = .2

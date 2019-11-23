@@ -1,6 +1,7 @@
 """ Routing avatars to storages and policies  """
 
 from typing import List
+import numpy as np
 
 from configs.structure import Config
 from environment.thieves_guardians_env import TGEnv
@@ -163,15 +164,15 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     for storage in avatar_storages:
         storage.compute_returns()
 
-    team_idx = {team: [] for team in range(env.num_teams)}
-    for avatar_id in range(env.num_avatars):
-        team_idx[env.id2team[avatar_id]] += [avatar_id]
-    win_rate = {}
-    rewards = total_rewards.final_history(drop_last=True).sum(axis=0)
-    for team in team_idx:
-        win_rate[team] = rewards[team_idx[team]].sum() / rewards.sum()
-    for team, policy in enumerate(team_policies):
-        policy.scheduler.report_progress(win_rate[team])
+    # Report progress
+    avatar_rewards = total_rewards.final_history(drop_last=True)
+    avg_team_rewards = np.array([
+        avatar_rewards[:, mask].sum()  / sum(mask)  # take average per avatar
+        for mask in env.team_masks
+    ])  # shape [num_teams,] holds the average reward of all thieves thieves got and the average of all guardians
+    relative_team_rewards = avg_team_rewards / avg_team_rewards.sum()
+    for measure, policy in zip(relative_team_rewards, team_policies):
+        policy.scheduler.report_progress(measure)
 
     # Update policies
     losses_history = [[] for _ in range(env.num_teams)]

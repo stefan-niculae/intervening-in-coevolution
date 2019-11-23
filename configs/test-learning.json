@@ -28,8 +28,8 @@
   "max_grad_norm": 10,
 
   "log_interval": 1,
-  "eval_interval": 5,
-  "save_interval": 999,
+  "eval_interval": 999,
+  "save_interval": 5,
 
   "seed": 0
 }

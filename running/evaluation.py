@@ -9,7 +9,7 @@ from running.training import _get_initial_recurrent_state
 from intervening.scheduling import SCRIPTED
 
 
-def evaluate(env: TGEnv, team_policies: List[Policy], sampling_method: int):
+def simulate_episode(env: TGEnv, team_policies: List[Policy], sampling_method: int):
     map_history     = []
     pos2id_history  = []
     rewards_history = []
@@ -81,4 +81,4 @@ def evaluate(env: TGEnv, team_policies: List[Policy], sampling_method: int):
     rewards_history.append(cumulative_reward.copy())
     actions_history.append([ACTION_IDX2SYMBOL[DEAD]] * env.num_avatars)
 
-    return map_history, pos2id_history, rewards_history, actions_history
+    return map_history, pos2id_history, rewards_history, actions_history, infos['end_reason']
