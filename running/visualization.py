@@ -108,14 +108,14 @@ def log_hyperparams_and_metrics(config: Config,
         'run_time': time() - start_time
     }
     for team_idx, team_name in enumerate(TEAM_NAMES):
-        metrics    [f'{team_name}s-winrate-against_training_opponents'] = selves_wons[team_idx].mean()
+        metrics    [f'comparison/{team_name}s-winrate-against_training_opponents'] = selves_wons[team_idx].mean()
         if others_wons is not None:
-            metrics[f'{team_name}s-winrate-against_external_opponents'] = others_wons[team_idx].mean()
+            metrics[f'comparison/{team_name}s-winrate-against_external_opponents'] = others_wons[team_idx].mean()
 
         for op in DESCRIPTIVE_STATS:
-            metrics[f'{team_name}s-reward_{op}-against_training_opponents'] = getattr(selves_rewards, op)()
+            metrics[f'comparison/{team_name}s-reward_{op}-against_training_opponents'] = getattr(selves_rewards, op)()
             if others_rewards is not None:
-                metrics[f'{team_name}s-winrate-against_external_opponents'] = getattr(others_rewards, op)()
+                metrics[f'comparison/{team_name}s-winrate-against_external_opponents'] = getattr(others_rewards, op)()
 
     # Tensorboard only accepts int, float, str, bool, or torch.Tensor
     # So we turn lists into their string representation, rightfully treating them as categorical values (if more than one item)
