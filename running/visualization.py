@@ -4,12 +4,8 @@ from typing import List
 from torch.utils.tensorboard import SummaryWriter
 
 from agent.policies import Policy
+from environment.thieves_guardians_env import TEAM_NAMES, TGEnv
 
-
-TEAM_NAMES = [
-    'Thieves',
-    'Guardians'
-]
 
 DESCRIPTIVE_STATS = ['mean', 'max']  # any combination of ['min', 'mean', 'std', 'max']
 
@@ -18,7 +14,7 @@ def log_layers(team_policies: List[Policy], writer: SummaryWriter, update_number
     """ Adds histograms of all parameters and their gradients """
     for team_name, policy in zip(TEAM_NAMES, team_policies):
         for layer_name, layer_params in policy.controller.named_parameters():
-            writer.add_histogram(f'weights/{team_name}/{layer_name}', layer_params, update_number)
+            writer.add_histogram(f'weights/{team_name}s/{layer_name}', layer_params, update_number)
             if layer_params.grad is not None:
                 writer.add_histogram(f'grads/policy/{layer_name}', layer_params.grad, update_number)
 
@@ -33,7 +29,7 @@ def log_descriptive_statistics(array: np.array, prefix: str, writer, update_numb
         )
 
 
-def log_scalars(training_history: (np.array, np.array, np.array, [str], [dict], [dict]), writer: SummaryWriter, update_number: int):
+def log_scalars(training_history: (np.array, np.array, np.array, [str], [dict], [dict]), writer: SummaryWriter, update_number: int, env: TGEnv):
     (
         avatar_total_reward,
         avatar_steps_alive,
@@ -52,7 +48,13 @@ def log_scalars(training_history: (np.array, np.array, np.array, [str], [dict], 
     num_avatars = avatar_total_reward.shape[1]
     for name, array in [('total-episode-reward', avatar_total_reward), ('episode-steps-alive', avatar_steps_alive)]:
         for avatar_id in range(num_avatars):
-            log_descriptive_statistics(array[:, avatar_id], f'{name}/avatar-{avatar_id}/', writer, update_number)
+            team = env.id2team[avatar_id]
+            log_descriptive_statistics(array[:, avatar_id], f'{name}/{TEAM_NAMES[team]}-{avatar_id}/', writer, update_number)
+
+    # Aggregates of rewards and episode length per team
+    for team_name, team_mask in zip(TEAM_NAMES, env.team_masks):
+        log_descriptive_statistics(avatar_total_reward[:, team_mask].sum(axis=1), f'total-episode-reward/{team_name}s-sum/',     writer, update_number)
+        log_descriptive_statistics(avatar_steps_alive [:, team_mask].mean(axis=1), f'episode-steps-alive/{team_name}s-average/', writer, update_number)
 
     # End of episode reasons, percentage per iteration
     num_episodes = len(episode_end_reasons)

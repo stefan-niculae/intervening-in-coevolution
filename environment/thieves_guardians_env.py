@@ -64,6 +64,11 @@ WINNING_REASONS = {
     None: 'Out of time',
 }
 
+TEAM_NAMES = [
+    'Thief',
+    'Guardian'
+]
+
 
 def _coords_where(grid: np.array):
     """ A position (x, y) of an arbitrary one in the grid """

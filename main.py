@@ -48,7 +48,7 @@ def main(config_path: str):
             # Write progress summaries
             if do_this_iteration(config.log_interval, update_number, config.num_iterations):
                 log_layers(policies, logs_writer, update_number)
-                log_scalars(training_history, logs_writer, update_number)
+                log_scalars(training_history, logs_writer, update_number, env)
 
             # Evaluate and record video
             if do_this_iteration(config.eval_interval, update_number, config.num_iterations):
