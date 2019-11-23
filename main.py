@@ -1,7 +1,6 @@
 """ Orchestrates I/O and learning """
 
 from sys import argv
-import warnings
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -10,7 +9,7 @@ from tqdm import tqdm as progress_bar
 from running.training import instantiate, perform_update
 from running.evaluation import evaluate
 from running.visualization import log_layers, log_scalars
-from running.utils import paths, do_this_iteration, save_code
+from running.utils import paths, do_this_iteration, save_code, save_model
 from environment.visualization import create_animation
 from configs.structure import read_config, save_config
 from intervening.scheduling import SAMPLE, DETERMINISTIC, SCRIPTED, action_source_names
@@ -40,27 +39,30 @@ def main(config_path: str):
 
     logs_writer = SummaryWriter(logs_dir)
 
-    # Main training loop
-    for update_number in progress_bar(range(config.num_iterations)):
-        # Collect rollouts and update weights
-        training_history = perform_update(config, env, policies, storages)
+    try:
+        # Main training loop
+        for update_number in progress_bar(range(config.num_iterations), 'Training'):
+            # Collect rollouts and update weights
+            training_history = perform_update(config, env, policies, storages)
 
-        # Write progress summaries
-        if do_this_iteration(config.log_interval, update_number, config.num_iterations):
-            log_layers(policies, logs_writer, update_number)
-            log_scalars(training_history, logs_writer, update_number)
+            # Write progress summaries
+            if do_this_iteration(config.log_interval, update_number, config.num_iterations):
+                log_layers(policies, logs_writer, update_number)
+                log_scalars(training_history, logs_writer, update_number)
 
-        # Evaluate and record video
-        if do_this_iteration(config.eval_interval, update_number, config.num_iterations):
-            for sampling_method in [SAMPLE, DETERMINISTIC]:
-                env_history = evaluate(env, policies, sampling_method)
-                create_animation(env_history, video_path % (update_number, action_source_names[sampling_method]))
+            # Evaluate and record video
+            if do_this_iteration(config.eval_interval, update_number, config.num_iterations):
+                for sampling_method in [SAMPLE, DETERMINISTIC]:
+                    env_history = evaluate(env, policies, sampling_method)
+                    create_animation(env_history, video_path % (update_number, action_source_names[sampling_method]))
 
-        # Checkpoint current model weights
-        if do_this_iteration(config.save_interval, update_number, config.num_iterations):
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
-                torch.save(policies, checkpoint_path % update_number)
+            # Checkpoint current model weights
+            if do_this_iteration(config.save_interval, update_number, config.num_iterations):
+                save_model(policies, checkpoint_path % update_number)
+    except KeyboardInterrupt:
+        print('Stopped training, saving model...')
+        if config.save_interval > 0:
+            save_model(policies, checkpoint_path % update_number + ' final')
 
     # TODO log final
     # Flush logs

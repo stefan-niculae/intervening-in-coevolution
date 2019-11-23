@@ -1,8 +1,12 @@
-import numpy as np
+import warnings
 from pathlib import Path
 from datetime import datetime
 import os
 import os.path
+
+import torch
+import numpy as np
+
 from shutil import copytree, ignore_patterns, make_archive, rmtree
 
 
@@ -65,6 +69,12 @@ def save_code(save_path: str):
 
     # Remove the temporary, unarchived folder
     rmtree(save_path)
+
+
+def save_model(model, save_path: str):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        torch.save(model, save_path)
 
 
 class EpisodeAccumulator:
