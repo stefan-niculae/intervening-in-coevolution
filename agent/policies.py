@@ -1,42 +1,58 @@
 """ Maps env state to action and provides rules on how to update inner controller """
 
 from abc import ABC
+from typing import Optional
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.distributions.categorical import Categorical
 
+from agent.utils import softmax
 from configs.structure import Config
-from agent.controllers import CONTROLLER_CLASSES
+from agent.controllers import RecurrentController
 from intervening.scheduling import Scheduler, SAMPLE, UNIFORM, INVERSE, DETERMINISTIC
-
-
-def softmax(x: np.array) -> np.array:
-    x = np.exp(x - max(x))
-    return x / (sum(x) + 1e-9)
 
 
 class Policy(ABC):
     """ Abstract class """
     def __init__(self, config: Config, env_state_shape: tuple, num_actions: int):
         # Scheduler setup
+        # TODO refactor externally?
         self.scheduler = Scheduler(config)
 
         # Controller setup
-        self.controller_class = CONTROLLER_CLASSES[config.encoder]
-        self.controller = None  # will be set by children
-
-        self.num_actions = num_actions
-        self.entropy_coef = self.scheduler.get_current_entropy_coef()
+        self.controller = RecurrentController(config, env_state_shape, num_actions)
 
         # Optimizer setup
         self.max_grad_norm = config.max_grad_norm
-
-    def _build_optimizer(self):
-        """ must be set by each child after setting self.controller """
         self.recurrent_controller = self.controller.is_recurrent
-        self.all_parameters = list(self.controller.parameters())
-        self.optimizer = torch.optim.Adam(self.all_parameters, lr=self.scheduler.get_current_lr())
+        self.optimizers = {
+            component_name: torch.optim.Adam(
+                params,
+                lr=self.scheduler.get_current_lr(),
+                eps=config.adam_epsilon)
+            for component_name, params in self._components_params().items()
+        }
+
+        # For uniformly random action picking
+        self.num_actions = num_actions
+
+    def _components_params(self) -> dict:
+        """ One optimizer will be created for each, by default all optimizers """
+        return {'all': self.controller.parameters()}
+
+    def _optimize(self, loss: torch.scalar_tensor, component_name='all'):
+        optimizer = self.optimizers[component_name]
+        optimizer.zero_grad()
+
+        # Retain the graph so that multiple backward passes can be done through the same hidden recurrent states
+        loss.backward(retain_graph=self.recurrent_controller)
+
+        # Clip gradients
+        params = optimizer.param_groups[0]['params']  # by default pytorch makes one group
+        nn.utils.clip_grad_norm_(params, self.max_grad_norm)
+
+        optimizer.step()
 
     def pick_action(self, env_state, rec_h, rec_c, sampling_method: int, externally_chosen_action:int = None):
         """
@@ -59,17 +75,19 @@ class Policy(ABC):
         env_state = torch.tensor(env_state, dtype=torch.float32)
 
         # actor_logits: float tensor of shape [batch_size, num_actions]
-        actor_logits, value, h, c = self.controller.forward(
+        encoder_out, h, c = self.controller.encode(
             # Set dummy batch sizes of 1
             env_state.view(1, *env_state.shape),
             rec_h,
             rec_c,
         )
 
+        actor_logits = self.controller.actor(encoder_out)
         action_distributions = Categorical(logits=actor_logits)  # float tensor of shape [1, num_actions]
 
         # Take the action provided
         if externally_chosen_action is not None:
+            # TODO refactor externally?
             action = externally_chosen_action
 
         else:
@@ -99,10 +117,13 @@ class Policy(ABC):
             action.item(),
             action_log_prob.item(),
             actor_logits,
-            None if value is None else value.item(),
+            self._compute_state_value(encoder_out),
             h,
             c,
         )
+
+    def _compute_state_value(self, encoder_out) -> Optional[float]:
+        return None
 
     def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns):
         """
@@ -129,32 +150,27 @@ class Policy(ABC):
             actions:    int tensor of shape  [batch_size,]
 
         Returns:
+            encoder_out: float tensor of shape [batch_size, m]  -- so it's not recomputed again for values
             action_log_probs: float tensor of shape [batch_size,]
             entropy:          float tensor of shape [batch_size,]
-            values:           float tensor of shape [batch_size,]
         """
-        # actor_logits: float tensor of shape [batch_size, num_actions]
-        # values: float tensor of shape [batch_size,1]
-        actor_logits, values, _, _ = self.controller.forward(env_states, rec_hs, rec_cs)
+        encoder_out, _, _ = self.controller.encode(env_states, rec_hs, rec_cs)
+        actor_logits = self.controller.actor(encoder_out)
         action_distributions = Categorical(logits=actor_logits)  # float tensor of shape [batch_size, num_actions]
 
         action_log_probs = action_distributions.log_prob(actions)  # float tensor of shape [batch_size,]
         entropy = action_distributions.entropy()  # float tensor of shape [batch_size,]
 
-        return action_log_probs, entropy, values
-
-    def _optimize(self, loss):
-        self.optimizer.zero_grad()
-        # Retain the graph so that multiple backward passes can be done through the same hidden recurrent states
-        loss.backward(retain_graph=self.recurrent_controller)
-        nn.utils.clip_grad_norm_(self.all_parameters, self.max_grad_norm)
-        self.optimizer.step()
+        return encoder_out, action_log_probs, entropy
 
     def after_iteration(self) -> dict:
         self.scheduler.current_update += 1
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = self.scheduler.get_current_lr()
-        self.entropy_coef = self.scheduler.get_current_entropy_coef()
+        # TODO input noise/layers dropout params
+
+        # Set learning rate to the optimizer for each component
+        for optimizer in self.optimizers.values():
+            optimizer.param_groups[0]['lr'] = self.scheduler.get_current_lr()  # by default pytorch makes one group
+
         return self.scheduler.current_values
 
 
@@ -162,9 +178,11 @@ class PG(Policy):
     """ Policy Gradient - single actor """
     def __init__(self, config: Config, env_state_shape, num_actions):
         super().__init__(config, env_state_shape, num_actions)
+        self.entropy_coef = self.scheduler.get_current_entropy_coef()
 
-        self.controller = self.controller_class(config, env_state_shape, num_actions)
-        self._build_optimizer()
+    def after_iteration(self) -> dict:
+        self.entropy_coef = self.scheduler.get_current_entropy_coef()
+        return super().after_iteration()
 
     def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns) -> {str: float}:
         """
@@ -173,15 +191,15 @@ class PG(Policy):
         Returns:
             {name : loss}
         """
-        action_log_probs, entropy, _ = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
+        _, action_log_probs, entropy = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
 
-        policy_loss = -(action_log_probs * returns).mean()
+        actor_loss = -(action_log_probs * returns).mean()
         entropy_loss = -entropy.mean()
-        loss = policy_loss + self.entropy_coef * entropy_loss
+        loss = actor_loss + self.entropy_coef * entropy_loss
 
         self._optimize(loss)
         return {
-            'actor': policy_loss.item(),
+            'actor':     actor_loss.item(),
             'entropy': entropy_loss.item(),
         }
 
@@ -190,12 +208,11 @@ class PPO(PG):
     """ Proximal Policy Optimization — actor and critic with max bound on update """
     def __init__(self, config: Config, env_state_shape, num_actions):
         super().__init__(config, env_state_shape, num_actions)
-
-        self.controller = self.controller_class(config, env_state_shape, num_actions)
-        self._build_optimizer()
-
         self.clip_param = config.ppo_clip
         self.critic_coef = config.ppo_critic_coef
+
+    def _compute_state_value(self, encoder_out) -> Optional[float]:
+        return self.controller.critic(encoder_out)
 
     def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns) -> {str: float}:
         """
@@ -205,8 +222,9 @@ class PPO(PG):
         Returns:
             {name : loss}
         """
-        action_log_probs, entropy, values = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
+        encoder_out, action_log_probs, entropy = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
 
+        values = self._compute_state_value(encoder_out)
         advantage = returns - values.detach()
 
         ratio = torch.exp(action_log_probs - old_action_log_probs.detach())
@@ -223,19 +241,45 @@ class PPO(PG):
 
         self._optimize(loss)
         return {
-            'actor': actor_loss.item(),
-            'critic': critic_loss.item(),
+            'actor':     actor_loss.item(),
+            'critic':   critic_loss.item(),
             'entropy': entropy_loss.item(),
         }
 
 
 class SAC(Policy):
     def __init__(self, config: Config, env_state_shape: tuple, num_actions: int):
-        self.tau = config.sac_tau
-        self.alpha = config.sac_alpha
-        self.dynamic_alpha = config.sac_dynamic_alpha
         super().__init__(config, env_state_shape, num_actions)
 
+        self.tau = config.sac_tau
+        self.dynamic_alpha = config.sac_dynamic_entropy
+        if self.dynamic_alpha:
+            self.target_entropy = -np.log((1. / num_actions)) * .98  # set maximum entropy as the target
+            self.log_alpha = torch.zeros(1, requires_grad=True)
+            self.alpha = self.log_alpha.exp()
+        else:
+            self.alpha = config.sac_alpha
+
+    def _components_params(self) -> dict:
+        component2params = {
+            'actor':    self.controller.actor   .parameters(),
+            'critic':   self.controller.critic  .parameters(),
+            'critic_2': self.controller.critic_2.parameters(),
+        }
+        if self.dynamic_alpha:
+            component2params['alpha'] = [self.log_alpha]
+        return component2params
+
+    def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns):
+        env_next_states = env_states
+        # Calculate critic loss
+        # Ordinary Q-learning loss plus the additional entropy term
+        qf1_next_target = self.controller.critic_target(env_next_states)
+        qf2_next_target = self.controller.critic_2_target(env_next_states)
+        min_qf_next_target = action_probabilities * (
+                    torch.min(qf1_next_target, qf2_next_target) - self.alpha * log_action_probabilities)
+        min_qf_next_target = min_qf_next_target.mean(dim=1).unsqueeze(-1)
+        next_q_value = reward_batch + (1.0 - mask_batch) * self.hyperparameters["discount_rate"] * (min_qf_next_target)
 
 
 POLICY_CLASSES = {

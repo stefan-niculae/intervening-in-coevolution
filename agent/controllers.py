@@ -1,16 +1,10 @@
-""" Neural network architectures mapping state to action logits """
+""" An controller holds the encoder (fc/conv, may have a recurrent ending) and the decoder heads (actor, critic(s)) """
 
 import torch
 import torch.nn as nn
 
 from configs.structure import Config
-
-
-def init(module, weight_init, bias_init, gain=1):
-    # TODO use initialization
-    weight_init(module.weight.data, gain=gain)
-    bias_init(module.bias.data)
-    return module
+from agent.utils import copy_weights
 
 
 ACTIVATION_FUNCTIONS = {
@@ -20,22 +14,25 @@ ACTIVATION_FUNCTIONS = {
 }
 
 
-# TODO (?) Transformer
-# TODO (?) batch normalization, residual connection, etc
+# TODO (?) Transformer encoder
+# TODO (?) batch/layer normalization, residual connection, etc
+# TODO initialization: (tanh -> xavier; relu -> he)?
 
-class RecurrentEncoder(nn.Module):
+class RecurrentController(nn.Module):
     def __init__(self, config: Config, env_state_shape: tuple, num_actions: int):
         super().__init__()
-        self.encoder_layer_size    = config.encoder_layer_size
-        self.recurrent_layer_size = config.recurrent_layer_size
-        self.is_recurrent         = config.num_recurrent_layers > 0
-        self.activation = ACTIVATION_FUNCTIONS[config.activation_function]
-        self.encoder = None  # will be set by children
 
-    def _build_recurrent_and_decoders(self, config: Config, num_actions: int, encoder_out_dim: int):
-        """ must be called by each child after setting self.encoder """
+        """ Encoder """
+        activation = ACTIVATION_FUNCTIONS[config.activation_function]
+        if config.encoder == 'fc':
+            encoder_out_dim, self.encoder = _build_linear_encoder(config, env_state_shape, activation)
+        if config.encoder == 'conv':
+            encoder_out_dim, self.encoder = _build_conv_encoder(config, env_state_shape, activation)
+
+        """ Encoder recurrent component """
+        self.is_recurrent = config.num_recurrent_layers > 0
         if self.is_recurrent:
-            actor_critic_inp_dim = config.recurrent_layer_size
+            decoders_inp_dim = config.recurrent_layer_size
             self.recurrent = nn.LSTM(
                 input_size=encoder_out_dim,  # number of features
                 hidden_size=config.recurrent_layer_size,
@@ -52,40 +49,28 @@ class RecurrentEncoder(nn.Module):
 
         else:
             # If the recurrent layer(s) are missing, we input directly from the encoder
-            actor_critic_inp_dim = encoder_out_dim
+            decoders_inp_dim = encoder_out_dim
 
-        # Build decoder heads
-        self.actor = None
-        self.critic = None
+        """ Decoder heads """
+        if config.algorithm in ['pg', 'ppo', 'sac']:
+            self.actor = _build_linear_decoder(config, decoders_inp_dim, num_actions)
+        if config.algorithm in ['ppo', 'sac']:
+            self.critic = _build_linear_decoder(config, decoders_inp_dim, 1)
+        if config.algorithm in ['sac']:
+            # Takes the minimum out of the two critics to combat over-optimism
+            self.critic_2        = _build_linear_decoder(config, decoders_inp_dim, 1)
 
-        if config.algorithm in ['pg', 'ppo']:
-            self.actor = self._make_linear_decoder(config, actor_critic_inp_dim, num_actions)
-        if config.algorithm == 'ppo':
-            self.critic = self._make_linear_decoder(config, actor_critic_inp_dim, 1)
+            # Target networks for the two critics to reduce variance
+            self.critic_target   = _build_linear_decoder(config, decoders_inp_dim, 1)
+            self.critic_2_target = _build_linear_decoder(config, decoders_inp_dim, 1)
 
-    def _make_linear_decoder(self, config: Config, input_dim: int, output_dim: int):
-        num_layers = config.num_decoder_layers
-        hidden_size = config.decoder_layer_size
+            # They both start at the same point
+            copy_weights(self.critic,   self.critic_target)
+            copy_weights(self.critic_2, self.critic_target_2)
 
-        if num_layers == 1:
-            return nn.Linear(input_dim, output_dim)
-
-        if num_layers == 2:
-            return nn.Sequential(
-                nn.Linear(input_dim, hidden_size),
-                nn.Linear(hidden_size, output_dim),
-            )
-
-        hidden_layers = [nn.Linear(hidden_size, hidden_size)] * hidden_size
-        return nn.Sequential(
-            nn.Linear(input_dim, hidden_size),
-            *hidden_layers,
-            nn.Linear(hidden_size, output_dim),
-        )
-
-    def forward(self, env_states, rec_h_inp, rec_c_inp):
+    def encode(self, env_states, rec_h_inp, rec_c_inp):
         """
-        Compute actor_logits and state_value from the actor and critic, and report the resulting recurrent state (h and c)
+        Run encoder, with logic for the optional recurrent part
 
         Args:
             env_states:   float tensor of shape [batch_size, *env_state_shape]
@@ -107,64 +92,68 @@ class RecurrentEncoder(nn.Module):
                 (rec_h_inp, rec_c_inp)
             )
             # Undo the dummy timestep of 1
-            actor_critic_inp = rec_out.squeeze(1)
+            encoder_out = rec_out.squeeze(1)
         else:
-            actor_critic_inp = encoder_out
             rec_h_out = None
             rec_c_out = None
-
-        actor_logits = self.actor (actor_critic_inp)
-        state_values = self.critic(actor_critic_inp) if self.critic else None
-
-        return actor_logits, state_values, rec_h_out, rec_c_out
+        # TODO variational
+        return encoder_out, rec_h_out, rec_c_out
 
 
-class FCEncoder(RecurrentEncoder):
-    def __init__(self, config: Config, env_state_shape: tuple, num_actions: int):
-        super().__init__(config, env_state_shape, num_actions)
+# TODO unify these builders
+def _build_linear_decoder(config: Config, input_dim: int, output_dim: int):
+    num_layers = config.num_decoder_layers
+    hidden_size = config.decoder_layer_size
 
-        # Inputs are flattened
-        num_inputs = 1
-        for dim_size in env_state_shape:
-            num_inputs *= dim_size
+    if num_layers == 1:
+        return nn.Linear(input_dim, output_dim)
 
-        hidden_layers = [
-            nn.Linear(config.encoder_layer_size, config.encoder_layer_size),
-            self.activation(),
-        ] * config.num_encoder_layers
-        self.encoder = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(num_inputs, config.encoder_layer_size),
-            self.activation(),
-            *hidden_layers
+    if num_layers == 2:
+        return nn.Sequential(
+            nn.Linear(input_dim, hidden_size),
+            nn.Linear(hidden_size, output_dim),
         )
 
-        self._build_recurrent_and_decoders(config, num_actions,
-                                           encoder_out_dim=config.encoder_layer_size)
+    hidden_layers = [nn.Linear(hidden_size, hidden_size)] * hidden_size
+    return nn.Sequential(
+        nn.Linear(input_dim, hidden_size),
+        *hidden_layers,
+        nn.Linear(hidden_size, output_dim),
+    )
 
 
-class ConvEncoder(RecurrentEncoder):
-    def __init__(self, config: Config, env_state_shape: tuple, num_actions: int):
-        super().__init__(config, env_state_shape, num_actions)
+def _build_linear_encoder(config: Config, env_state_shape: tuple, activation):
+    # Inputs are flattened
+    num_inputs = 1
+    for dim_size in env_state_shape:
+        num_inputs *= dim_size
 
-        num_channels, width, height = env_state_shape
+    hidden_layers = [
+        nn.Linear(config.encoder_layer_size, config.encoder_layer_size),
+        activation(),
+    ] * config.num_encoder_layers
 
-        hidden_layers = [
-            nn.Conv2d(config.encoder_layer_size, config.encoder_layer_size, kernel_size=1, stride=1),
-            self.activation(),
-        ] * config.num_encoder_layers
-        self.encoder = nn.Sequential(
-            nn.Conv2d(num_channels, config.encoder_layer_size, kernel_size=1, stride=1),
-            self.activation(),
-            *hidden_layers,
-            torch.nn.Flatten(),
-        )
-
-        self._build_recurrent_and_decoders(config, num_actions,
-                                           encoder_out_dim=width * height * config.encoder_layer_size)
+    num_outputs = config.encoder_layer_size
+    return num_outputs, nn.Sequential(
+        nn.Flatten(),
+        nn.Linear(num_inputs, config.encoder_layer_size),
+        activation(),
+        *hidden_layers
+    )
 
 
-CONTROLLER_CLASSES = {
-    'fc': FCEncoder,
-    'conv': ConvEncoder,
-}
+def _build_conv_encoder(config: Config, env_state_shape: tuple, activation):
+    num_channels, width, height = env_state_shape
+
+    hidden_layers = [
+        nn.Conv2d(config.encoder_layer_size, config.encoder_layer_size, kernel_size=1, stride=1),
+        activation(),
+    ] * config.num_encoder_layers
+
+    num_outputs = width * height * config.encoder_layer_size
+    return num_outputs, nn.Sequential(
+        nn.Conv2d(num_channels, config.encoder_layer_size, kernel_size=1, stride=1),
+        activation(),
+        *hidden_layers,
+        torch.nn.Flatten(),
+    )

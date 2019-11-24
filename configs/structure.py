@@ -48,8 +48,8 @@ class Config:
     # SAC temperature: determines the relative importance of the entropy term against the reward
     sac_alpha: float = .2
 
-    # Whether to adjust alpha automatically
-    sac_dynamic_alpha: bool = False
+    # Whether to automatically tune entropy
+    sac_dynamic_entropy: bool = False
 
     """ Intervening """
     # Encourage exploration: by optimizing for diversity in action distributions

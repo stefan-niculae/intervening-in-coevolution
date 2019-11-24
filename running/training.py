@@ -5,7 +5,8 @@ import numpy as np
 
 from configs.structure import Config
 from environment.thieves_guardians_env import TGEnv
-from agent.policies import POLICY_CLASSES, Policy, softmax
+from agent.policies import POLICY_CLASSES, Policy
+from agent.utils import softmax
 from agent.storage import RolloutStorage
 from running.utils import EpisodeAccumulator
 from intervening.scheduling import SCRIPTED

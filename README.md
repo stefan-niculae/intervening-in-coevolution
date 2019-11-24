@@ -19,6 +19,7 @@ Requires Python 3.7. Tested on MacOS and Windows
 Inspiration sources:
 - PG & PPO: https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail
 - GAE: https://github.com/openai/baselines/blob/master/baselines/ppo2/runner.py#L53-L66
+- SAC: https://github.com/pranz24/pytorch-soft-actor-critic/ and https://github.com/quantumiracle/SOTA-RL-Algorithms/ (for discrete action space)
 
 
 ## Running
