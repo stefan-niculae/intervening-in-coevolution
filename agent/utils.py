@@ -32,3 +32,8 @@ def softmax(x: np.array) -> np.array:
     """
     x = np.exp(x - max(x))
     return x / (sum(x) + 1e-9)
+
+
+def kl_divergence(mean, log_var):
+    """ From N(mean, log_var^2) to U(0, 1) """
+    return -(1 + log_var - mean ** 2 - log_var.exp()).sum()

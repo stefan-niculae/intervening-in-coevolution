@@ -122,7 +122,7 @@ def log_hyperparams_and_metrics(config: Config,
     hyperparams = asdict(config)
     for k, v in hyperparams.items():
         if type(v) not in [int, float, str, bool]:
-            if len(v) == 1:
+            if type(v) in [tuple, list] and len(v) == 1:
                 hyperparams[k] = v[0]
             else:
                 hyperparams[k] = str(v)

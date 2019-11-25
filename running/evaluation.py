@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 
 from typing import List
@@ -58,20 +59,21 @@ def simulate_episode(env: TGEnv, team_policies: List[Policy], sampling_method):
                 else:
                     scripted_action = None
 
-                (
-                    actions[avatar_id],
-                    action_log_probs[avatar_id],
-                    _,
-                    _,
-                    rec_hs[avatar_id],
-                    rec_cs[avatar_id],
-                ) = policy.pick_action_and_info(
-                    env_states[avatar_id],
-                    rec_hs[avatar_id],
-                    rec_cs[avatar_id],
-                    sampling_method=sampling_method[team],
-                    externally_chosen_action=scripted_action,
-                )
+                with torch.no_grad():
+                    (
+                        actions[avatar_id],
+                        action_log_probs[avatar_id],
+                        _,
+                        _,
+                        rec_hs[avatar_id],
+                        rec_cs[avatar_id],
+                    ) = policy.pick_action_and_info(
+                        env_states[avatar_id],
+                        rec_hs[avatar_id],
+                        rec_cs[avatar_id],
+                        sampling_method=sampling_method[team],
+                        externally_chosen_action=scripted_action,
+                    )
             else:
                 actions[avatar_id] = DEAD
 

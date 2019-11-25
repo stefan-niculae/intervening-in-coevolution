@@ -71,13 +71,19 @@ class Config:
     # Winning rate threshold to stop learning
     win_rate_threshold: float = 1
 
-    # Inverse
+    # Inverse sampling
     inverse_proba_milestones:  List[int] = (0,)
     inverse_proba_values:      List[int] = (0.,)
+
+    variational_constraint_milestones: List[int]   = (0,)
+    variational_constraint_values:     List[float] = (0,)
 
     """ Controller """
     # Encoder architecture — check agent/controllers.py
     encoder: str = 'fc'  # fc | conv
+
+    # Whether to treat encoder output as mean and variance and sample from it
+    variational: bool = False
 
     activation_function: str = 'relu'  # lrelu | relu | tanh
 

@@ -51,6 +51,11 @@ class RecurrentController(nn.Module):
             # If the recurrent layer(s) are missing, we input directly from the encoder
             decoders_inp_dim = encoder_out_dim
 
+        self.variational = config.variational
+        if self.variational:
+            self.latent_means    = nn.Linear(decoders_inp_dim, decoders_inp_dim)
+            self.latent_log_vars = nn.Linear(decoders_inp_dim, decoders_inp_dim)
+
         """ Decoder heads """
         if config.algorithm in ['pg', 'ppo', 'sac']:
             self.actor = _build_linear_decoder(config, decoders_inp_dim, num_actions, final_softmax=config.algorithm == 'sac')
@@ -97,8 +102,20 @@ class RecurrentController(nn.Module):
         else:
             rec_h_out = None
             rec_c_out = None
-        # TODO variational
-        return encoder_out, rec_h_out, rec_c_out
+
+        if self.variational:
+            means    = self.latent_means(encoder_out)
+            log_vars = self.latent_log_vars(encoder_out)
+
+            # Reparametrize
+            stds = torch.exp(log_vars / 2)
+            z = torch.randn_like(means, requires_grad=False)  # random
+            encoder_out = z * stds + means
+        else:
+            means = None
+            log_vars = None
+
+        return means, log_vars, encoder_out, rec_h_out, rec_c_out
 
 
 # TODO unify these builders

@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions.categorical import Categorical
 
-from agent.utils import softmax, copy_weights
+from agent.utils import softmax, copy_weights, kl_divergence
 from configs.structure import Config
 from agent.controllers import RecurrentController
 from intervening.scheduling import Scheduler, SAMPLE, UNIFORM, INVERSE, DETERMINISTIC
@@ -23,6 +23,8 @@ class Policy(ABC):
 
         # Controller setup
         self.controller = RecurrentController(config, env_state_shape, num_actions)
+        if config.variational:
+            self.variational_coef = self.scheduler.get_current_variational_coef()
 
         # Optimizer setup
         self.max_grad_norm = config.max_grad_norm
@@ -59,6 +61,13 @@ class Policy(ABC):
         actor_logits = self.controller.actor(encoder_out)
         return actor_logits, Categorical(logits=actor_logits)  # float tensor of shape [1, num_actions]
 
+    def _variational_loss(self, means, log_vars) -> (float, dict):
+        if self.controller.variational:
+            l = self.variational_coef * kl_divergence(means, log_vars)
+            return l, {'variational': l}
+        else:
+            return 0, {}
+
     def pick_action_and_info(self, env_state, rec_h, rec_c, sampling_method: int, externally_chosen_action:int = None):
         """
         In the given env_state, pick a single action.
@@ -80,7 +89,7 @@ class Policy(ABC):
         env_state = torch.tensor(env_state, dtype=torch.float32)
 
         # actor_logits: float tensor of shape [batch_size, num_actions]
-        encoder_out, h, c = self.controller.encode(
+        _, _, encoder_out, h, c = self.controller.encode(
             # Set dummy batch sizes of 1
             env_state.view(1, *env_state.shape),
             rec_h,
@@ -136,6 +145,9 @@ class Policy(ABC):
         self.scheduler.current_update += 1
         # TODO sync up input noise/layers dropout params
 
+        if self.controller.variational:
+            self.variational_coef = self.scheduler.get_current_entropy_coef()
+
         # Set learning rate to the optimizer for each component
         for optimizer in self.optimizers.values():
             optimizer.param_groups[0]['lr'] = self.scheduler.get_current_lr()  # by default pytorch makes one group
@@ -169,14 +181,14 @@ class PG(Policy):
             action_log_probs: float tensor of shape [batch_size,]
             entropy:          float tensor of shape [batch_size,]
         """
-        encoder_out, _, _ = self.controller.encode(env_states, rec_hs, rec_cs)
+        latent_means, latent_log_vars, encoder_out, _, _ = self.controller.encode(env_states, rec_hs, rec_cs)
         actor_logits = self.controller.actor(encoder_out)
         action_distributions = Categorical(logits=actor_logits)  # float tensor of shape [batch_size, num_actions]
 
         action_log_probs = action_distributions.log_prob(actions)  # float tensor of shape [batch_size,]
         entropy = action_distributions.entropy()  # float tensor of shape [batch_size,]
 
-        return encoder_out, action_log_probs, entropy
+        return latent_means, latent_log_vars, encoder_out, action_log_probs, entropy
 
     def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns) -> {str: float}:
         """
@@ -190,16 +202,21 @@ class PG(Policy):
             old_action_log_probs: float tensor of shape [batch_size,]
             returns:              float tensor of shape [batch_size,]
         """
-        _, action_log_probs, entropy = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
+        latent_means, latent_log_vars, _, action_log_probs, entropy = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
 
         actor_loss = -(action_log_probs * returns).mean()
         entropy_loss = -entropy.mean()
-        loss = actor_loss + self.entropy_coef * entropy_loss
+        loss = (actor_loss +
+                entropy_loss * self.entropy_coef)
+
+        variational_loss, extra_losses = self._variational_loss(latent_means, latent_log_vars)
+        loss += variational_loss
 
         self._optimize(loss)
         return {
-            'actor':     actor_loss.item(),
+            'actor': actor_loss.item(),
             'entropy': entropy_loss.item(),
+            **extra_losses,
         }
 
 
@@ -226,7 +243,7 @@ class PPO(PG):
             old_action_log_probs: float tensor of shape [batch_size,]
             returns:              float tensor of shape [batch_size,]
         """
-        encoder_out, action_log_probs, entropy = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
+        latent_means, latent_log_vars, encoder_out, action_log_probs, entropy = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
 
         values = self._compute_state_value(encoder_out)
         advantage = returns - values.detach()
@@ -243,11 +260,15 @@ class PPO(PG):
                 self.critic_coef * critic_loss +
                 self.entropy_coef * entropy_loss)
 
+        variational_loss, extra_losses = self._variational_loss(latent_means, latent_log_vars)
+        loss += variational_loss
+
         self._optimize(loss)
         return {
             'actor':     actor_loss.item(),
             'critic':   critic_loss.item(),
             'entropy': entropy_loss.item(),
+            **extra_losses,
         }
 
 
@@ -280,7 +301,7 @@ class SAC(Policy):
         return action_probas, Categorical(action_probas)  # note: no logits
 
     def _pick_batch_actions_and_infos(self, env_states, rec_hs_inp, rec_cs_inp):
-        encoder_out, rec_hs_out, rec_cs_out = self.controller.encode(env_states, rec_hs_inp, rec_cs_inp)
+        latent_means, latent_log_vars, encoder_out, rec_hs_out, rec_cs_out = self.controller.encode(env_states, rec_hs_inp, rec_cs_inp)
 
         action_probs, action_distributions = self._action_distributions(encoder_out)
         action_log_probs = torch.log(action_probs + 1e-10)
@@ -319,7 +340,7 @@ class SAC(Policy):
 
         """
         # Critic
-        encoder_out, _, _ = self.controller.encode(env_states[0], rec_hs, rec_cs)
+        latent_means, latent_log_vars, encoder_out, _, _ = self.controller.encode(env_states[0], rec_hs, rec_cs)
         all_actions_values_1 = self.controller.critic_1(encoder_out)
         all_actions_values_2 = self.controller.critic_2(encoder_out)
         all_actions_values_min = torch.min(all_actions_values_1, all_actions_values_2)
