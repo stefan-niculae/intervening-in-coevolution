@@ -65,7 +65,7 @@ def simulate_episode(env: TGEnv, team_policies: List[Policy], sampling_method):
                     _,
                     rec_hs[avatar_id],
                     rec_cs[avatar_id],
-                ) = policy.pick_action(
+                ) = policy.pick_action_and_info(
                     env_states[avatar_id],
                     rec_hs[avatar_id],
                     rec_cs[avatar_id],

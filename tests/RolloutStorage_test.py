@@ -1,6 +1,6 @@
 import unittest
 
-from agent.storage import RolloutStorage
+from agent.storage import RolloutsStorage
 from configs.structure import Config
 
 
@@ -10,7 +10,7 @@ class TestReturns(unittest.TestCase):
         config.num_transitions = len(reward_seq)
         config.gae_lambda = gae_lambda
         config.discount = discount
-        storage = RolloutStorage(config, env_state_shape=(1,))
+        storage = RolloutsStorage(config, env_state_shape=(1,))
 
         if reset_before_insert:
             storage.reset()

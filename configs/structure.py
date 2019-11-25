@@ -100,6 +100,9 @@ class Config:
     # Gather this many transitions for each iteration
     num_transitions: int = 2000
 
+    # Remember this many
+    memory_size: int = None
+
     # How large the batches of transitions should be
     batch_size: int = 256
 
@@ -109,6 +112,8 @@ class Config:
     """ Steering """
     # Discount future rewards (gamma)
     discount: float = .99
+
+    multi_step: int = 1
 
     """ Optimizer """
     # Adam optimizer parameter
@@ -150,11 +155,11 @@ def read_config(config_path: str) -> Config:
     if config.gae_lambda > 0:
         assert config.algorithm == 'ppo',  'GAE defined only for PPO'
 
-    if config.algorithm == 'sac' and config.state_representation == 'grid':
-        print('Warning: SAC used with grid state representation.')
-
     if config.state_representation == 'coordinates':
         assert config.encoder != 'conv', 'Convolution cannot be used on a list of coordinates'
+
+    if config.multi_step > 1 or config.memory_size:
+        assert config.algorithm == 'sac'
 
     return config
 

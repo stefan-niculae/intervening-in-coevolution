@@ -5,9 +5,10 @@ from typing import Optional
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.distributions.categorical import Categorical
 
-from agent.utils import softmax
+from agent.utils import softmax, copy_weights
 from configs.structure import Config
 from agent.controllers import RecurrentController
 from intervening.scheduling import Scheduler, SAMPLE, UNIFORM, INVERSE, DETERMINISTIC
@@ -41,12 +42,12 @@ class Policy(ABC):
         """ One optimizer will be created for each, by default all optimizers """
         return {'all': self.controller.parameters()}
 
-    def _optimize(self, loss: torch.scalar_tensor, component_name='all'):
+    def _optimize(self, loss: torch.scalar_tensor, component_name='all', retain_graph=False):
         optimizer = self.optimizers[component_name]
         optimizer.zero_grad()
 
         # Retain the graph so that multiple backward passes can be done through the same hidden recurrent states
-        loss.backward(retain_graph=self.recurrent_controller)
+        loss.backward(retain_graph=retain_graph or self.recurrent_controller)
 
         # Clip gradients
         params = optimizer.param_groups[0]['params']  # by default pytorch makes one group
@@ -54,7 +55,11 @@ class Policy(ABC):
 
         optimizer.step()
 
-    def pick_action(self, env_state, rec_h, rec_c, sampling_method: int, externally_chosen_action:int = None):
+    def _action_distributions(self, encoder_out):
+        actor_logits = self.controller.actor(encoder_out)
+        return actor_logits, Categorical(logits=actor_logits)  # float tensor of shape [1, num_actions]
+
+    def pick_action_and_info(self, env_state, rec_h, rec_c, sampling_method: int, externally_chosen_action:int = None):
         """
         In the given env_state, pick a single action.
         Called during rollouts collection to generate the next action, one by one
@@ -82,8 +87,7 @@ class Policy(ABC):
             rec_c,
         )
 
-        actor_logits = self.controller.actor(encoder_out)
-        action_distributions = Categorical(logits=actor_logits)  # float tensor of shape [1, num_actions]
+        actor_logits, action_distributions = self._action_distributions(encoder_out)
 
         # Take the action provided
         if externally_chosen_action is not None:
@@ -125,18 +129,29 @@ class Policy(ABC):
     def _compute_state_value(self, encoder_out) -> Optional[float]:
         return None
 
-    def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns):
-        """
-        Args:
-            env_states:           float tensor of shape [batch_size, *env_state_shape]
-            rec_hs:               float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
-            rec_cs:               float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
-            actions:              int   tensor of shape [batch_size,]
-            old_action_log_probs: float tensor of shape [batch_size,]
-            returns:              float tensor of shape [batch_size,]
+    def update(self, *args):
+        return {}
 
-        """
-        pass
+    def after_iteration(self) -> dict:
+        self.scheduler.current_update += 1
+        # TODO sync up input noise/layers dropout params
+
+        # Set learning rate to the optimizer for each component
+        for optimizer in self.optimizers.values():
+            optimizer.param_groups[0]['lr'] = self.scheduler.get_current_lr()  # by default pytorch makes one group
+
+        return self.scheduler.current_values
+
+
+class PG(Policy):
+    """ Policy Gradient - single actor """
+    def __init__(self, config: Config, env_state_shape, num_actions):
+        super().__init__(config, env_state_shape, num_actions)
+        self.entropy_coef = self.scheduler.get_current_entropy_coef()
+
+    def after_iteration(self) -> dict:
+        self.entropy_coef = self.scheduler.get_current_entropy_coef()
+        return super().after_iteration()
 
     def _evaluate_actions(self, env_states, rec_hs, rec_cs, actions):
         """
@@ -163,33 +178,17 @@ class Policy(ABC):
 
         return encoder_out, action_log_probs, entropy
 
-    def after_iteration(self) -> dict:
-        self.scheduler.current_update += 1
-        # TODO input noise/layers dropout params
-
-        # Set learning rate to the optimizer for each component
-        for optimizer in self.optimizers.values():
-            optimizer.param_groups[0]['lr'] = self.scheduler.get_current_lr()  # by default pytorch makes one group
-
-        return self.scheduler.current_values
-
-
-class PG(Policy):
-    """ Policy Gradient - single actor """
-    def __init__(self, config: Config, env_state_shape, num_actions):
-        super().__init__(config, env_state_shape, num_actions)
-        self.entropy_coef = self.scheduler.get_current_entropy_coef()
-
-    def after_iteration(self) -> dict:
-        self.entropy_coef = self.scheduler.get_current_entropy_coef()
-        return super().after_iteration()
-
     def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns) -> {str: float}:
         """
         Increase the probability of actions that give high returns
 
-        Returns:
-            {name : loss}
+        Args
+            env_states:           float tensor of shape [batch_size, *env_state_shape]
+            rec_hs:               float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
+            rec_cs:               float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
+            actions:              int   tensor of shape [batch_size,]
+            old_action_log_probs: float tensor of shape [batch_size,]
+            returns:              float tensor of shape [batch_size,]
         """
         _, action_log_probs, entropy = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
 
@@ -219,8 +218,13 @@ class PPO(PG):
         Increase the probability of actions that give high advantages
         and move predicted values towards observed returns
 
-        Returns:
-            {name : loss}
+        Args
+            env_states:           float tensor of shape [batch_size, *env_state_shape]
+            rec_hs:               float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
+            rec_cs:               float tensor of shape [num_recurrent_layers, batch_size, recurrent_layer_size]
+            actions:              int   tensor of shape [batch_size,]
+            old_action_log_probs: float tensor of shape [batch_size,]
+            returns:              float tensor of shape [batch_size,]
         """
         encoder_out, action_log_probs, entropy = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
 
@@ -249,10 +253,11 @@ class PPO(PG):
 
 class SAC(Policy):
     def __init__(self, config: Config, env_state_shape: tuple, num_actions: int):
+        self.dynamic_alpha = config.sac_dynamic_entropy
         super().__init__(config, env_state_shape, num_actions)
 
+        self.discount = config.discount
         self.tau = config.sac_tau
-        self.dynamic_alpha = config.sac_dynamic_entropy
         if self.dynamic_alpha:
             self.target_entropy = -np.log((1. / num_actions)) * .98  # set maximum entropy as the target
             self.log_alpha = torch.zeros(1, requires_grad=True)
@@ -263,23 +268,96 @@ class SAC(Policy):
     def _components_params(self) -> dict:
         component2params = {
             'actor':    self.controller.actor   .parameters(),
-            'critic':   self.controller.critic  .parameters(),
+            'critic_1': self.controller.critic_1.parameters(),
             'critic_2': self.controller.critic_2.parameters(),
         }
         if self.dynamic_alpha:
             component2params['alpha'] = [self.log_alpha]
         return component2params
 
-    def update(self, env_states, rec_hs, rec_cs, actions, old_action_log_probs, returns):
-        env_next_states = env_states
-        # Calculate critic loss
-        # Ordinary Q-learning loss plus the additional entropy term
-        qf1_next_target = self.controller.critic_target(env_next_states)
-        qf2_next_target = self.controller.critic_2_target(env_next_states)
-        min_qf_next_target = action_probabilities * (
-                    torch.min(qf1_next_target, qf2_next_target) - self.alpha * log_action_probabilities)
-        min_qf_next_target = min_qf_next_target.mean(dim=1).unsqueeze(-1)
-        next_q_value = reward_batch + (1.0 - mask_batch) * self.hyperparameters["discount_rate"] * (min_qf_next_target)
+    def _action_distributions(self, encoder_out):
+        action_probas = self.controller.actor(encoder_out)
+        return action_probas, Categorical(action_probas)  # note: no logits
+
+    def _pick_batch_actions_and_infos(self, env_states, rec_hs_inp, rec_cs_inp):
+        encoder_out, rec_hs_out, rec_cs_out = self.controller.encode(env_states, rec_hs_inp, rec_cs_inp)
+
+        action_probs, action_distributions = self._action_distributions(encoder_out)
+        action_log_probs = torch.log(action_probs + 1e-10)
+
+        actions = action_distributions.sample()
+
+        return encoder_out, rec_hs_out, rec_cs_inp, actions, action_probs, action_log_probs
+
+    def _estimate_future_value(self, env_states, rec_hs, rec_cs):
+        """ Observed reward + discounted estimated future value, using the target networks """
+        with torch.no_grad():
+            # TODO multistep
+            encoder_out, rec_hs, rec_cs, actions, action_probs, action_log_probs = self._pick_batch_actions_and_infos(
+                env_states, rec_hs, rec_cs)
+
+            action_values_1 = self.controller.critic_1_target(encoder_out)
+            action_values_2 = self.controller.critic_2_target(encoder_out)
+            action_values_min = torch.min(action_values_1, action_values_2)
+            all_action_values = action_probs * (action_values_min - self.alpha * action_log_probs)
+            avg_values = all_action_values.mean(dim=1)
+
+        return avg_values
+
+    def update(self, env_states, rec_hs, rec_cs, actions, rewards, dones):
+        """
+        Args:
+            env_states: [2, batch_size, *env_state_shape]
+                env_states[0] = current_env_state
+                env_states[1] = next_env_state
+            rec_hs: [batch_size, rec_size]
+            rec_cs: [batch_size, rec_size]
+            actions: int [batch_size,]
+            dones: float [batch_size]
+            rewards: [batch_size]
+        Returns:
+
+        """
+        # Critic
+        encoder_out, _, _ = self.controller.encode(env_states[0], rec_hs, rec_cs)
+        all_actions_values_1 = self.controller.critic_1(encoder_out)
+        all_actions_values_2 = self.controller.critic_2(encoder_out)
+        all_actions_values_min = torch.min(all_actions_values_1, all_actions_values_2)
+
+        chosen_actions_value_1 = all_actions_values_1.take(actions)
+        chosen_actions_value_2 = all_actions_values_2.take(actions)
+
+        future_values = rewards + (1 - dones) * self.discount * self._estimate_future_value(env_states[1], rec_hs, rec_cs)
+        critic_1_loss = F.mse_loss(chosen_actions_value_1, future_values)
+        critic_2_loss = F.mse_loss(chosen_actions_value_2, future_values)
+
+        # Actor
+        _, _, _, _, action_probs, action_log_probs = self._pick_batch_actions_and_infos(env_states[0], rec_hs, rec_cs)
+        inside_term = self.alpha * action_log_probs - all_actions_values_min
+        actor_loss = (action_probs * inside_term).mean()
+
+        # Perform optimization steps
+        self._optimize(critic_1_loss, 'critic_1', retain_graph=True)
+        self._optimize(critic_2_loss, 'critic_2', retain_graph=True)
+        self._optimize(actor_loss,    'actor')
+
+        # Perform soft updates
+        copy_weights(self.controller.critic_1, self.controller.critic_1_target, self.tau)
+        copy_weights(self.controller.critic_2, self.controller.critic_2_target, self.tau)
+
+        losses = {
+            'actor':    actor_loss.item(),
+            'critic_1': critic_1_loss.item(),
+            'critic_2': critic_2_loss.item(),
+        }
+
+        if self.dynamic_alpha:
+            s = torch.sum(action_log_probs * action_probs, dim=1)
+            alpha_loss = -(self.log_alpha * (s + self.target_entropy).detach()).mean()
+            self._optimize(alpha_loss, 'alpha')
+            losses['alpha'] = alpha_loss
+
+        return losses
 
 
 POLICY_CLASSES = {

@@ -53,22 +53,23 @@ class RecurrentController(nn.Module):
 
         """ Decoder heads """
         if config.algorithm in ['pg', 'ppo', 'sac']:
-            self.actor = _build_linear_decoder(config, decoders_inp_dim, num_actions)
-        if config.algorithm in ['ppo', 'sac']:
+            self.actor = _build_linear_decoder(config, decoders_inp_dim, num_actions, final_softmax=config.algorithm == 'sac')
+        if config.algorithm in ['ppo']:
             self.critic = _build_linear_decoder(config, decoders_inp_dim, 1)
         if config.algorithm in ['sac']:
             # Takes the minimum out of the two critics to combat over-optimism
-            self.critic_2        = _build_linear_decoder(config, decoders_inp_dim, 1)
+            self.critic_1        = _build_linear_decoder(config, decoders_inp_dim, num_actions)
+            self.critic_2        = _build_linear_decoder(config, decoders_inp_dim, num_actions)
 
             # Target networks for the two critics to reduce variance
-            self.critic_target   = _build_linear_decoder(config, decoders_inp_dim, 1)
-            self.critic_2_target = _build_linear_decoder(config, decoders_inp_dim, 1)
+            self.critic_1_target = _build_linear_decoder(config, decoders_inp_dim, num_actions)
+            self.critic_2_target = _build_linear_decoder(config, decoders_inp_dim, num_actions)
 
             # They both start at the same point
-            copy_weights(self.critic,   self.critic_target)
-            copy_weights(self.critic_2, self.critic_target_2)
+            copy_weights(self.critic_1, self.critic_1_target)
+            copy_weights(self.critic_2, self.critic_2_target)
 
-    def encode(self, env_states, rec_h_inp, rec_c_inp):
+    def encode(self, env_states, rec_h_inp=None, rec_c_inp=None):
         """
         Run encoder, with logic for the optional recurrent part
 
@@ -101,25 +102,31 @@ class RecurrentController(nn.Module):
 
 
 # TODO unify these builders
-def _build_linear_decoder(config: Config, input_dim: int, output_dim: int):
+def _build_linear_decoder(config: Config, input_dim: int, output_dim: int, final_softmax=False):
     num_layers = config.num_decoder_layers
     hidden_size = config.decoder_layer_size
 
     if num_layers == 1:
-        return nn.Linear(input_dim, output_dim)
+        layers = [nn.Linear(input_dim, output_dim)]
 
-    if num_layers == 2:
-        return nn.Sequential(
+    elif num_layers == 2:
+        layers = [
             nn.Linear(input_dim, hidden_size),
             nn.Linear(hidden_size, output_dim),
-        )
+        ]
 
-    hidden_layers = [nn.Linear(hidden_size, hidden_size)] * hidden_size
-    return nn.Sequential(
-        nn.Linear(input_dim, hidden_size),
-        *hidden_layers,
-        nn.Linear(hidden_size, output_dim),
-    )
+    else:
+        hidden_layers = [nn.Linear(hidden_size, hidden_size)] * hidden_size
+        layers = [
+            nn.Linear(input_dim, hidden_size),
+            *hidden_layers,
+            nn.Linear(hidden_size, output_dim)
+        ]
+
+    if final_softmax:
+        layers.append(nn.Softmax(dim=1))
+
+    return nn.Sequential(*layers)
 
 
 def _build_linear_encoder(config: Config, env_state_shape: tuple, activation):

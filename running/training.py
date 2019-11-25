@@ -7,18 +7,19 @@ from configs.structure import Config
 from environment.thieves_guardians_env import TGEnv
 from agent.policies import POLICY_CLASSES, Policy
 from agent.utils import softmax
-from agent.storage import RolloutStorage
+from agent.storage import RolloutsStorage, OnPolicyStorage, CyclicStorage
 from running.utils import EpisodeAccumulator
 from intervening.scheduling import SCRIPTED
 
 
-def instantiate(config: Config) -> (TGEnv, List[Policy], List[RolloutStorage]):
+def instantiate(config: Config) -> (TGEnv, List[Policy], List[RolloutsStorage]):
     """ Instantiate the environment, agents and storages """
     env = TGEnv(config)
 
     # Each avatar has its own storage (because they do not all die at the same time)
+    storage_class = CyclicStorage if config.algorithm == 'sac' else OnPolicyStorage
     avatar_storages = [
-        RolloutStorage(config, env.state_shape)
+        storage_class(config, env.state_shape)
         for _ in range(env.num_avatars)
     ]
 
@@ -53,7 +54,7 @@ def _get_initial_recurrent_state(avatar_policies):
     return rec_hs, rec_cs
 
 
-def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_storages: List[RolloutStorage]):
+def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_storages: List[RolloutsStorage]):
     """ Collects rollouts and updates """
 
     # Used to log
@@ -108,7 +109,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
                     values[avatar_id],
                     next_rec_hs[avatar_id],
                     next_rec_cs[avatar_id],
-                ) = policy.pick_action(
+                ) = policy.pick_action_and_info(
                     env_states[avatar_id],
                     rec_hs[avatar_id],
                     rec_cs[avatar_id],

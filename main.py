@@ -2,10 +2,16 @@
 
 from time import time
 from sys import argv
+import warnings
 
 import torch
-from torch.utils.tensorboard import SummaryWriter
+
 from tqdm import tqdm as progress_bar
+
+with warnings.catch_warnings():
+    # Silence tensorflow (2.0) deprecated usages of numpy
+    warnings.simplefilter('ignore', FutureWarning)
+    from torch.utils.tensorboard import SummaryWriter
 
 from running.training import instantiate, perform_update
 from running.evaluation import simulate_episode
@@ -39,7 +45,10 @@ def main(config_path: str):
         create_animation(env_history, video_path % (0, 'scripted'))
         return
 
-    logs_writer = SummaryWriter(logs_dir)
+    with warnings.catch_warnings():
+        # Silence tensorflow (2.0) deprecated usages of numpy
+        warnings.simplefilter('ignore', FutureWarning)
+        logs_writer = SummaryWriter(logs_dir)
 
     if config.compare_interval > 0:
         comparison_policies, _ = read_models(config.comparison_models_dir)
@@ -60,7 +69,7 @@ def main(config_path: str):
             # Evaluate and record video
             if do_this_iteration(config.eval_interval, update_number, config.num_iterations):
                 for sampling_method in [SAMPLE, DETERMINISTIC]:
-                    [*env_history, end_reason] = simulate_episode(env, policies, sampling_method)
+                    [*env_history, _] = simulate_episode(env, policies, sampling_method)
                     create_animation(env_history, video_path % (update_number, action_source_names[sampling_method]))
 
             # Checkpoint current model weights
@@ -75,20 +84,24 @@ def main(config_path: str):
     except KeyboardInterrupt:
         print('Stopped training, finishing up...')
 
-        # Save final weights
-        if config.save_interval > 0:
-            save_model(policies, checkpoint_path % update_number)
+    # Save final weights
+    if config.save_interval > 0:
+        save_model(policies, checkpoint_path % update_number)
 
-        # Save hyperparams and metrics (comparisons against others and themselves)
-        selves_wons, selves_rewards     = play_against_others(env, policies, [policies],          config.comparison_num_episodes)
-        if config.compare_interval > 0:
-            others_wons, others_rewards = play_against_others(env, policies, comparison_policies, config.comparison_num_episodes)
-        else:
-            others_wons, others_rewards = None, None
-        log_hyperparams_and_metrics(config,
-                                    selves_wons, selves_rewards,
-                                    others_wons, others_rewards,
-                                    logs_writer, start_time)
+    if config.eval_interval > 0:
+        [*env_history, _] = simulate_episode(env, policies, SAMPLE)
+        create_animation(env_history, video_path % (update_number, action_source_names[SAMPLE]))
+
+    # Save hyperparams and metrics (comparisons against others and themselves)
+    selves_wons, selves_rewards     = play_against_others(env, policies, [policies],          config.comparison_num_episodes)
+    if config.compare_interval > 0:
+        others_wons, others_rewards = play_against_others(env, policies, comparison_policies, config.comparison_num_episodes)
+    else:
+        others_wons, others_rewards = None, None
+    log_hyperparams_and_metrics(config,
+                                selves_wons, selves_rewards,
+                                others_wons, others_rewards,
+                                logs_writer, start_time)
 
     # TODO log final
     # Flush logs

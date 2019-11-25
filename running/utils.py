@@ -73,7 +73,8 @@ def save_code(save_path: str):
 
 def save_model(model, save_path: str):
     with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
+        warnings.simplefilter('ignore', UserWarning)
+        # Silence "Couldn't retrieve source code for container of type <...>. It won't be checked for correctness upon loading"
         torch.save(model, save_path)
 
 
