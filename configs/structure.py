@@ -106,6 +106,14 @@ class Config:
     num_decoder_layers: int = 1
     decoder_layer_size: int = 32
 
+    batch_norm: bool = False
+
+    layer_norm: bool = False
+
+    conv_kernel_size: int = 1
+
+    conv_residual: bool = False
+
     """ Running """
     # Random seed
     seed: int = 0

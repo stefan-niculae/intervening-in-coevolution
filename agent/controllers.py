@@ -15,7 +15,7 @@ ACTIVATION_FUNCTIONS = {
 
 
 # TODO (?) Transformer encoder
-# TODO (?) batch/layer normalization, residual connection, etc
+# TODO (?) residual connection, etc
 # TODO initialization: (tanh -> xavier; relu -> he)?
 
 class RecurrentController(nn.Module):
@@ -123,22 +123,19 @@ def _build_linear_decoder(config: Config, input_dim: int, output_dim: int, final
     num_layers = config.num_decoder_layers
     hidden_size = config.decoder_layer_size
 
-    if num_layers == 1:
-        layers = [nn.Linear(input_dim, output_dim)]
+    in_sizes = [input_dim] + [hidden_size] * num_layers
+    layers = []
+    for i, in_size in enumerate(in_sizes):
+        if i == len(in_sizes) - 1:
+            out_size = output_dim
+        else:
+            out_size = in_sizes[i + 1]
+        layers.append(nn.Linear(in_size, out_size))
+        if config.batch_norm:
+            layers.append(nn.BatchNorm2d(config.encoder_layer_size))
 
-    elif num_layers == 2:
-        layers = [
-            nn.Linear(input_dim, hidden_size),
-            nn.Linear(hidden_size, output_dim),
-        ]
-
-    else:
-        hidden_layers = [nn.Linear(hidden_size, hidden_size)] * hidden_size
-        layers = [
-            nn.Linear(input_dim, hidden_size),
-            *hidden_layers,
-            nn.Linear(hidden_size, output_dim)
-        ]
+    if config.layer_norm:
+        layers.append(nn.LayerNorm([output_dim]))
 
     if final_softmax:
         layers.append(nn.Softmax(dim=1))
@@ -152,32 +149,43 @@ def _build_linear_encoder(config: Config, env_state_shape: tuple, activation):
     for dim_size in env_state_shape:
         num_inputs *= dim_size
 
-    hidden_layers = [
-        nn.Linear(config.encoder_layer_size, config.encoder_layer_size),
-        activation(),
-    ] * config.num_encoder_layers
+    layers = [torch.nn.Flatten()]
+    if config.layer_norm:
+        layers.append(nn.LayerNorm([num_inputs]))
+
+    layer_sizes = [num_inputs] + [config.encoder_layer_size] * config.num_encoder_layers
+    for layer_size in layer_sizes:
+        layers.append(nn.Linear(layer_size, config.encoder_layer_size, bias=True))
+        layers.append(activation())
+        if config.batch_norm:
+            layers.append(nn.BatchNorm2d(config.encoder_layer_size))
+
+    if config.layer_norm:
+        layers.append(nn.LayerNorm([num_inputs]))
 
     num_outputs = config.encoder_layer_size
-    return num_outputs, nn.Sequential(
-        nn.Flatten(),
-        nn.Linear(num_inputs, config.encoder_layer_size),
-        activation(),
-        *hidden_layers
-    )
+    return num_outputs, nn.Sequential(*layers)
 
 
 def _build_conv_encoder(config: Config, env_state_shape: tuple, activation):
     num_channels, width, height = env_state_shape
 
-    hidden_layers = [
-        nn.Conv2d(config.encoder_layer_size, config.encoder_layer_size, kernel_size=1, stride=1),
-        activation(),
-    ] * config.num_encoder_layers
-
     num_outputs = width * height * config.encoder_layer_size
-    return num_outputs, nn.Sequential(
-        nn.Conv2d(num_channels, config.encoder_layer_size, kernel_size=1, stride=1),
-        activation(),
-        *hidden_layers,
-        torch.nn.Flatten(),
-    )
+
+    layers = []
+    layer_sizes = [num_channels] + [config.encoder_layer_size] * config.num_encoder_layers
+    for layer_size in layer_sizes:
+        layers.append(nn.Conv2d(layer_size, config.encoder_layer_size,
+                                bias=True,
+                                kernel_size=config.conv_kernel_size,
+                                stride=1,
+                                padding=0, padding_mode='zeros'))
+        layers.append(activation())
+        if config.batch_norm:
+            layers.append(nn.BatchNorm2d(config.encoder_layer_size))
+
+    layers.append(torch.nn.Flatten())
+    if config.layer_norm:
+        layers.append(nn.LayerNorm([num_outputs]))
+
+    return num_outputs, nn.Sequential(*layers)
