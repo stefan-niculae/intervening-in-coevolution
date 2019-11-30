@@ -22,8 +22,6 @@
   "lr_milestones":             [0],
   "lr_values":                 [0.001],
 
-  "win_rate_threshold": 1.0,
-
   "discount": 0.97,
   "max_grad_norm": 10,
 

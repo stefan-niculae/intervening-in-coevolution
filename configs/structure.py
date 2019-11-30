@@ -68,9 +68,6 @@ class Config:
     lr_milestones:             List[int]   = (   0,)
     lr_values:                 List[float] = (.001,)
 
-    # Winning rate threshold to stop learning
-    win_rate_threshold: float = 1
-
     # Inverse sampling
     inverse_proba_milestones:  List[int] = (0,)
     inverse_proba_values:      List[int] = (0.,)
@@ -82,6 +79,14 @@ class Config:
 
     latent_constraint_milestones: List[int]   = (0,)
     latent_constraint_values:     List[float] = (0,)
+
+    # Winrate for one side to kick in intervention tactics (1.0 to disable)
+    winrate_threshold: float = 1
+
+    adjust_lr_to: float = None
+    adjust_mi_to: float = None
+    adjust_uniform_to: float = None
+    adjust_scripted_to: float = None
 
     """ Encoder """
     # Encoder architecture — check agent/controllers.py
