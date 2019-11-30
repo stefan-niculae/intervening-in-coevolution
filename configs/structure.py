@@ -95,7 +95,7 @@ class Config:
     # Whether to treat encoder output as mean and variance and sample from it
     variational: bool = False
 
-    activation_function: str = 'relu'  # leaky_relu | relu | tanh
+    activation: str = 'relu'  # leaky_relu | relu | tanh
 
     num_encoder_layers: int = 2
     encoder_layer_size: int = 32
@@ -171,8 +171,19 @@ class Config:
 
 def read_config(config_path: str) -> Config:
     with open(config_path) as f:
-        dict_obj = json.load(f)
-    config = Config(**dict_obj)
+        raw_dict = json.load(f)
+
+    fields = Config.__dict__
+    parsed_dict = {}
+    for k, v in raw_dict.items():
+        # Example: lr=.1 -> lr_values=[.1], lr_milestones=[0]
+        if k not in fields and k + '_values' in fields:
+            parsed_dict[k + '_values'] = [v]
+            parsed_dict[k + '_milestones'] = [0]
+        else:
+            parsed_dict[k] = v
+
+    config = Config(**parsed_dict)
 
     if config.gae_lambda > 0:
         assert config.algorithm == 'ppo',  'GAE defined only for PPO'

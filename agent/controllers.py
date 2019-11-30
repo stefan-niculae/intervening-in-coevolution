@@ -1,6 +1,5 @@
 """ An controller holds the encoder (fc/conv, may have a recurrent ending) and the decoder heads (actor, critic(s)) """
 
-from functools import partial
 import torch
 import torch.nn as nn
 
@@ -23,7 +22,7 @@ class RecurrentController(nn.Module):
         super().__init__()
 
         """ Encoder """
-        activation = ACTIVATION_FUNCTIONS[config.activation_function]
+        activation = ACTIVATION_FUNCTIONS[config.activation]
         if config.encoder == 'fc':
             encoder_out_dim, self.encoder = _build_linear_encoder(config, env_state_shape, activation)
         if config.encoder == 'conv':
@@ -165,7 +164,7 @@ def _build_linear_encoder(config: Config, env_state_shape: tuple, activation):
     layer_sizes = [num_inputs] + [config.encoder_layer_size] * config.num_encoder_layers
     for layer_size in layer_sizes:
         layer = nn.Linear(layer_size, config.encoder_layer_size, bias=True)
-        _initialize_weights(layer, config.activation_function)
+        _initialize_weights(layer, config.activation)
         layers.append(layer)
 
         if config.batch_norm:  # TODO activation before batch norm?
@@ -192,7 +191,7 @@ def _build_conv_encoder(config: Config, env_state_shape: tuple, activation):
                           kernel_size=config.conv_kernel_size,
                           stride=1,
                           padding=0, padding_mode='zeros')
-        _initialize_weights(layer, config.activation_function)
+        _initialize_weights(layer, config.activation)
         layers.append(layer)
 
         if config.batch_norm:  # TODO activation before batch norm?
