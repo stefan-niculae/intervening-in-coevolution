@@ -1,4 +1,7 @@
+import torch
 import numpy as np
+
+NUM_BINS = 10
 
 
 def copy_weights(from_model, to_model, change_ratio: float = 1):
@@ -36,4 +39,72 @@ def softmax(x: np.array) -> np.array:
 
 def kl_divergence(mean, log_var):
     """ From N(mean, log_var^2) to U(0, 1) """
-    return -(1 + log_var - mean ** 2 - log_var.exp()).sum()
+    return -(1 + log_var - mean ** 2 - log_var.exp())
+
+
+def pmf(values: [float], num_bins=NUM_BINS, sigma=3.) -> [float]:
+    """
+    Soft histogram (gaussian)
+
+    differentiable
+
+    https://discuss.pytorch.org/t/differentiable-torch-histc/25865
+
+    Args:
+        values: float tensor of shape [n,]  # TODO make it take batch size
+
+    Returns:
+        float tensor of shape [num_bins,] pmf of `values`
+    """
+    with torch.no_grad():
+        vmin = values.min()
+        vmax = values.max()
+
+    delta = (vmax - vmin) / num_bins
+    centers = vmin + delta * (torch.arange(num_bins) + .5)
+
+    x = values.unsqueeze(dim=0) - centers.unsqueeze(dim=1)
+    x = (torch.sigmoid(sigma * (x + delta / 2)) -
+         torch.sigmoid(sigma * (x - delta / 2)))
+    x = x.sum(dim=1)
+
+    x /= sum(x)  # make it sum one
+
+    return x
+
+
+def cross_entropy(p, q, epsilon=1e-9):
+    """
+    Args:
+        p: float tensor of shape [batch_size, n]
+        q: float tensor of shape [batch_size, n]
+        epsilon: small float to combat zero probability
+
+    Returns
+        cross entropy batch-wise: float tensor of shape [batch_size,]
+
+    """
+    return -(p * (q + epsilon).log()).sum(1)
+
+
+def entropy(p):
+    """
+    Args:
+        p: float tensor of shape [batch_size, n]
+    Returns
+        float tensor of shape [batch_size,]
+    """
+    return cross_entropy(p, p)
+
+
+def pmf_mi(inputs, latent) -> float:
+    """
+    Computes number of bits to encode underlying events using `latent` rather than `inputs`
+
+    Args:
+        inputs: float tensor of shape [n,]
+        latent: float tensor of shape [m,] with grad
+    """
+    pmf_inputs = torch.stack([pmf(x.flatten()) for x in inputs])
+    pmf_latent = torch.stack([pmf(x.flatten()) for x in latent])
+    return cross_entropy(pmf_inputs, pmf_latent) - entropy(pmf_inputs)

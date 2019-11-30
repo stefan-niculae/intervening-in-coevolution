@@ -78,7 +78,12 @@ class Config:
     variational_constraint_milestones: List[int]   = (0,)
     variational_constraint_values:     List[float] = (0,)
 
-    """ Controller """
+    constrain_latent: bool = False
+
+    latent_constraint_milestones: List[int]   = (0,)
+    latent_constraint_values:     List[float] = (0,)
+
+    """ Encoder """
     # Encoder architecture — check agent/controllers.py
     encoder: str = 'fc'  # fc | conv
 

@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions.categorical import Categorical
 
-from agent.utils import softmax, copy_weights, kl_divergence
+from agent.utils import softmax, copy_weights, kl_divergence, pmf_mi
 from configs.structure import Config
 from agent.controllers import RecurrentController
 from intervening.scheduling import Scheduler, SAMPLE, UNIFORM, INVERSE, DETERMINISTIC
@@ -25,6 +25,9 @@ class Policy(ABC):
         self.controller = RecurrentController(config, env_state_shape, num_actions)
         if config.variational:
             self.variational_coef = self.scheduler.get_current_variational_coef()
+        self.constrain_latent = config.constrain_latent
+        if self.constrain_latent:
+            self.latent_mi_coef = self.scheduler.get_current_latent_mi_coef()
 
         # Optimizer setup
         self.max_grad_norm = config.max_grad_norm
@@ -61,14 +64,23 @@ class Policy(ABC):
         actor_logits = self.controller.actor(encoder_out)
         return actor_logits, Categorical(logits=actor_logits)  # float tensor of shape [1, num_actions]
 
-    def _variational_loss(self, means, log_vars) -> (float, dict):
-        if self.controller.variational:
-            l = self.variational_coef * kl_divergence(means, log_vars)
-            return l, {'variational': l}
-        else:
-            return 0, {}
+    def _variational_loss(self, means, log_vars, losses_dict) -> float:
+        if not self.controller.variational:
+            return 0
 
-    def pick_action_and_info(self, env_state, rec_h, rec_c, sampling_method: int, externally_chosen_action:int = None):
+        l = kl_divergence(means, log_vars).sum()
+        losses_dict['variational'] = l
+        return self.variational_coef * l
+
+    def _latent_loss(self, input_features, latent_representation, losses_dict) -> float:
+        if not self.constrain_latent:
+            return 0
+
+        l = pmf_mi(input_features, latent_representation).sum()
+        losses_dict['latent_mi'] = l
+        return self.latent_mi_coef * l
+
+    def pick_action_and_info(self, env_state, rec_h, rec_c, sampling_method: int, externally_chosen_action: int = None):
         """
         In the given env_state, pick a single action.
         Called during rollouts collection to generate the next action, one by one
@@ -147,6 +159,8 @@ class Policy(ABC):
 
         if self.controller.variational:
             self.variational_coef = self.scheduler.get_current_entropy_coef()
+        if self.constrain_latent:
+            self.latent_mi_coef = self.scheduler.get_current_latent_mi_coef()
 
         # Set learning rate to the optimizer for each component
         for optimizer in self.optimizers.values():
@@ -202,22 +216,23 @@ class PG(Policy):
             old_action_log_probs: float tensor of shape [batch_size,]
             returns:              float tensor of shape [batch_size,]
         """
-        latent_means, latent_log_vars, _, action_log_probs, entropy = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
+        latent_means, latent_log_vars, encoder_out, action_log_probs, entropy = self._evaluate_actions(env_states, rec_hs, rec_cs, actions)
 
         actor_loss = -(action_log_probs * returns).mean()
         entropy_loss = -entropy.mean()
         loss = (actor_loss +
                 entropy_loss * self.entropy_coef)
 
-        variational_loss, extra_losses = self._variational_loss(latent_means, latent_log_vars)
-        loss += variational_loss
+        losses_dict = {
+            'actor':     actor_loss.item(),
+            'entropy': entropy_loss.item(),
+        }
+
+        loss += self._variational_loss(latent_means, latent_log_vars, losses_dict)
+        loss += self._latent_loss(env_states, encoder_out, losses_dict)
 
         self._optimize(loss)
-        return {
-            'actor': actor_loss.item(),
-            'entropy': entropy_loss.item(),
-            **extra_losses,
-        }
+        return losses_dict
 
 
 class PPO(PG):
@@ -260,16 +275,17 @@ class PPO(PG):
                 self.critic_coef * critic_loss +
                 self.entropy_coef * entropy_loss)
 
-        variational_loss, extra_losses = self._variational_loss(latent_means, latent_log_vars)
-        loss += variational_loss
-
-        self._optimize(loss)
-        return {
+        losses_dict = {
             'actor':     actor_loss.item(),
             'critic':   critic_loss.item(),
             'entropy': entropy_loss.item(),
-            **extra_losses,
         }
+
+        loss += self._variational_loss(latent_means, latent_log_vars, losses_dict)
+        loss += self._latent_loss(env_states, encoder_out, losses_dict)
+
+        self._optimize(loss)
+        return losses_dict
 
 
 class SAC(Policy):
@@ -356,6 +372,7 @@ class SAC(Policy):
         _, _, _, _, action_probs, action_log_probs = self._pick_batch_actions_and_infos(env_states[0], rec_hs, rec_cs)
         inside_term = self.alpha * action_log_probs - all_actions_values_min
         actor_loss = (action_probs * inside_term).mean()
+        # TODO variational, mutual info loss
 
         # Perform optimization steps
         self._optimize(critic_1_loss, 'critic_1', retain_graph=True)

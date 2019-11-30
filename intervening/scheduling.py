@@ -45,6 +45,7 @@ class Scheduler:
         self.scripted_proba = make_schedule(config.scripted_proba_milestones, config.scripted_proba_values, iters)
         self.inverse_proba  = make_schedule(config.inverse_proba_milestones,  config.inverse_proba_values,  iters)
         self.variational_coef = make_schedule(config.variational_constraint_milestones, config.variational_constraint_values, iters)
+        self.latent_mi_coef = make_schedule(config.latent_constraint_milestones, config.latent_constraint_values, iters)
 
         self.sample_proba = 1 - self.uniform_proba - self.scripted_proba - self.inverse_proba
         self.sample_proba = np.maximum(0, self.sample_proba)
@@ -68,6 +69,9 @@ class Scheduler:
     def get_current_variational_coef(self) -> float:
         return self.variational_coef[self.current_update]
 
+    def get_current_latent_mi_coef(self) -> float:
+        return self.latent_mi_coef[self.current_update]
+
     def _normalized_action_source_probas(self) -> np.array:
         p = np.array([
             self.sample_proba  [self.current_update],
@@ -88,8 +92,10 @@ class Scheduler:
             for i, p in enumerate(self._normalized_action_source_probas())
         }
         return {
-            'lr':            self.get_current_lr(),
-            'entropy_coef':  self.get_current_entropy_coef(),
+            'lr':               self.get_current_lr(),
+            'entropy_coef':     self.get_current_entropy_coef(),
+            'variational_coef': self.get_current_variational_coef(),
+            'latent_mi_coef':   self.get_current_latent_mi_coef(),
             **probas
         }
 
