@@ -17,9 +17,9 @@ CELL_TYPES = [T, G, E, W, S]  # must increment from zero
 TYPE_COLORS = {
     E: 'lightgrey',
     W: 'dimgrey',
-    T: 'tab:purple',
+    T: '#FFCC00',  # USC cardinal
     G: 'tab:cyan',
-    S: 'tab:orange',
+    S: '#2774AE',  # UCLA blue
 }
 TYPE_NAMES = {
     E: 'Empty',
