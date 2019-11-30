@@ -24,10 +24,10 @@ class Policy(ABC):
         # Controller setup
         self.controller = RecurrentController(config, env_state_shape, num_actions)
         if config.variational:
-            self.variational_coef = self.scheduler.get_current_variational_coef()
+            self.variational_coef = self.scheduler.current_variational_coef
         self.constrain_latent = config.constrain_latent
         if self.constrain_latent:
-            self.latent_mi_coef = self.scheduler.get_current_latent_mi_coef()
+            self.latent_mi_coef = self.scheduler.current_latent_mi_coef
 
         # Optimizer setup
         self.max_grad_norm = config.max_grad_norm
@@ -35,7 +35,7 @@ class Policy(ABC):
         self.optimizers = {
             component_name: torch.optim.Adam(
                 params,
-                lr=self.scheduler.get_current_lr(),
+                lr=self.scheduler.current_lr,
                 eps=config.adam_epsilon)
             for component_name, params in self._components_params().items()
         }
@@ -153,18 +153,15 @@ class Policy(ABC):
     def update(self, *args):
         return {}
 
-    def after_iteration(self) -> dict:
-        self.scheduler.current_update += 1
-        # TODO sync up input noise/layers dropout params
-
+    def sync_scheduled_values(self) -> dict:
         if self.controller.variational:
-            self.variational_coef = self.scheduler.get_current_entropy_coef()
+            self.variational_coef = self.scheduler.current_entropy_coef
         if self.constrain_latent:
-            self.latent_mi_coef = self.scheduler.get_current_latent_mi_coef()
+            self.latent_mi_coef = self.scheduler.current_latent_mi_coef
 
         # Set learning rate to the optimizer for each component
         for optimizer in self.optimizers.values():
-            optimizer.param_groups[0]['lr'] = self.scheduler.get_current_lr()  # by default pytorch makes one group
+            optimizer.param_groups[0]['lr'] = self.scheduler.current_lr  # by default pytorch makes one group
 
         return self.scheduler.current_values
 
@@ -173,11 +170,11 @@ class PG(Policy):
     """ Policy Gradient - single actor """
     def __init__(self, config: Config, env_state_shape, num_actions):
         super().__init__(config, env_state_shape, num_actions)
-        self.entropy_coef = self.scheduler.get_current_entropy_coef()
+        self.entropy_coef = self.scheduler.current_entropy_coef
 
-    def after_iteration(self) -> dict:
-        self.entropy_coef = self.scheduler.get_current_entropy_coef()
-        return super().after_iteration()
+    def sync_scheduled_values(self) -> dict:
+        self.entropy_coef = self.scheduler.current_entropy_coef
+        return super().sync_scheduled_values()
 
     def _evaluate_actions(self, env_states, rec_hs, rec_cs, actions):
         """

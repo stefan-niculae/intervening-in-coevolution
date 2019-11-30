@@ -174,7 +174,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     ])  # shape [num_teams,] holds the average reward of all thieves thieves got and the average of all guardians
     relative_team_rewards = avg_team_rewards / avg_team_rewards.sum()
     for measure, policy in zip(relative_team_rewards, team_policies):
-        policy.scheduler.report_progress(measure)
+        policy.scheduler.end_iteration_report(measure)
 
     # Update policies
     losses_history = [[] for _ in range(env.num_teams)]
@@ -193,7 +193,7 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     for storage in avatar_storages:
         storage.reset()
 
-    scheduling_statuses = [policy.after_iteration() for policy in team_policies]
+    scheduling_statuses = [policy.sync_scheduled_values() for policy in team_policies]
 
     # Ignore last episode since it's most likely unfinished
     return (

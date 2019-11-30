@@ -68,9 +68,6 @@ class Config:
     lr_milestones:             List[int]   = (   0,)
     lr_values:                 List[float] = (.001,)
 
-    # Winning rate threshold to stop learning
-    win_rate_threshold: float = 1
-
     # Inverse sampling
     inverse_proba_milestones:  List[int] = (0,)
     inverse_proba_values:      List[int] = (0.,)
@@ -83,6 +80,14 @@ class Config:
     latent_constraint_milestones: List[int]   = (0,)
     latent_constraint_values:     List[float] = (0,)
 
+    # Winrate for one side to kick in intervention tactics (1.0 to disable)
+    winrate_threshold: float = 1
+
+    adjust_lr_to: float = None
+    adjust_mi_to: float = None
+    adjust_uniform_to: float = None
+    adjust_scripted_to: float = None
+
     """ Encoder """
     # Encoder architecture — check agent/controllers.py
     encoder: str = 'fc'  # fc | conv
@@ -90,7 +95,7 @@ class Config:
     # Whether to treat encoder output as mean and variance and sample from it
     variational: bool = False
 
-    activation_function: str = 'relu'  # lrelu | relu | tanh
+    activation_function: str = 'relu'  # leaky_relu | relu | tanh
 
     num_encoder_layers: int = 2
     encoder_layer_size: int = 32
@@ -100,6 +105,12 @@ class Config:
 
     num_decoder_layers: int = 1
     decoder_layer_size: int = 32
+
+    batch_norm: bool = False
+
+    layer_norm: bool = False
+
+    conv_kernel_size: int = 1
 
     """ Running """
     # Random seed
