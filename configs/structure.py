@@ -95,7 +95,7 @@ class Config:
     # Whether to treat encoder output as mean and variance and sample from it
     variational: bool = False
 
-    activation_function: str = 'relu'  # lrelu | relu | tanh
+    activation_function: str = 'relu'  # leaky_relu | relu | tanh
 
     num_encoder_layers: int = 2
     encoder_layer_size: int = 32
@@ -111,8 +111,6 @@ class Config:
     layer_norm: bool = False
 
     conv_kernel_size: int = 1
-
-    conv_residual: bool = False
 
     """ Running """
     # Random seed
