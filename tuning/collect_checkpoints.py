@@ -1,10 +1,15 @@
 import os
 import shutil
+import sys
 
-root_dir = '../outputs'
-destination_dir = '../collected-outputs'
 
 if __name__ == '__main__':
+    try:
+        root_dir = sys.argv[1]
+        destination_dir = sys.argv[2]
+    except:
+        print('usage: collect_checkpoints <source_root_dir> <destination_dir>')
+
     os.makedirs(destination_dir, exist_ok=True)
 
     for run_dir_name in os.listdir(root_dir):
