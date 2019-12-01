@@ -79,9 +79,10 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     next_rec_hs, next_rec_cs = rec_hs, rec_cs
     first_episode_step = True
 
-    # Set to training mode
+    # Set to eval mode because batch norm cannot be computed on a batch size of 1
+    # and when we pick actions we only pick one at a time
     for policy in team_policies:
-        policy.controller.train()
+        policy.controller.eval()
 
     # Collect rollouts
     # TODO (?): collect in parallel
@@ -175,6 +176,10 @@ def perform_update(config, env: TGEnv, team_policies: List[Policy], avatar_stora
     relative_team_rewards = avg_team_rewards / avg_team_rewards.sum()
     for measure, policy in zip(relative_team_rewards, team_policies):
         policy.scheduler.end_iteration_report(measure)
+
+    # Set to training mode
+    for policy in team_policies:
+        policy.controller.train()
 
     # Update policies
     losses_history = [[] for _ in range(env.num_teams)]

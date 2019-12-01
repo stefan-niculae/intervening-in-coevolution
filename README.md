@@ -2,6 +2,8 @@
 
 Team project for USC course CS-566 _Deep Learning_
 
+[Presentation link](https://docs.google.com/presentation/d/15h6Y2-9z8D5KjHKlFErx_rsckPDSoI42xj4B3SkkwIQ)
+
 ## Installation
 
 Requires Python 3.7. Tested on MacOS and Windows 
@@ -23,13 +25,14 @@ Inspiration sources:
 
 
 ## Running
-
-1. Start training: `python main.py <path-to-your-config>.json`
+1. Generate configs: `python configs/generate_configs.py`
+   - Check file to specify parameter combinations
+2. Start training: `python main.py <path-to-your-config>.json`
    - The format of the config is detailed in `configs/structure.py`   
-2. Check training throughout training: 
+3. Check training throughout training: 
    - start Tensorboard: `tensorboard --logdir=outputs` and access  localhost:6006 
    - and videos in `outputs/<experiment name>/videos`
-3. Compare model performances: run the `tuning/comparison.ipynb` notebook
+4. Compare model performances: run the `tuning/comparison.ipynb` notebook
    - start a Jupyter runtime: `jupyter lab` and access localhost:8888/lab
    - model checkpoints can be found in `outputs/<experiment-name>/trained_models/checkpoint-*.tar`
    - place `.tar` files in `tuning/comparison_models` (or a different directory which you can specify in the notebook)

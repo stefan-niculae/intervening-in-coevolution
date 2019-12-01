@@ -1,6 +1,5 @@
 """ An controller holds the encoder (fc/conv, may have a recurrent ending) and the decoder heads (actor, critic(s)) """
 
-from functools import partial
 import torch
 import torch.nn as nn
 
@@ -23,7 +22,7 @@ class RecurrentController(nn.Module):
         super().__init__()
 
         """ Encoder """
-        activation = ACTIVATION_FUNCTIONS[config.activation_function]
+        activation = ACTIVATION_FUNCTIONS[config.activation]
         if config.encoder == 'fc':
             encoder_out_dim, self.encoder = _build_linear_encoder(config, env_state_shape, activation)
         if config.encoder == 'conv':
@@ -132,7 +131,7 @@ def _build_linear_decoder(config: Config, input_dim: int, output_dim: int, final
             out_size = in_sizes[i + 1]
         layers.append(nn.Linear(in_size, out_size))
         if config.batch_norm:
-            layers.append(nn.BatchNorm2d(config.encoder_layer_size))
+            layers.append(nn.BatchNorm1d(out_size))
 
     if config.layer_norm:
         layers.append(nn.LayerNorm([output_dim]))
@@ -165,15 +164,15 @@ def _build_linear_encoder(config: Config, env_state_shape: tuple, activation):
     layer_sizes = [num_inputs] + [config.encoder_layer_size] * config.num_encoder_layers
     for layer_size in layer_sizes:
         layer = nn.Linear(layer_size, config.encoder_layer_size, bias=True)
-        _initialize_weights(layer, config.activation_function)
+        _initialize_weights(layer, config.activation)
         layers.append(layer)
 
         if config.batch_norm:  # TODO activation before batch norm?
-            layers.append(nn.BatchNorm2d(config.encoder_layer_size))
+            layers.append(nn.BatchNorm1d(config.encoder_layer_size))
         layers.append(activation())
 
     if config.layer_norm:
-        layers.append(nn.LayerNorm([num_inputs]))
+        layers.append(nn.LayerNorm([config.encoder_layer_size]))
 
     num_outputs = config.encoder_layer_size
     return num_outputs, nn.Sequential(*layers)
@@ -183,6 +182,7 @@ def _build_conv_encoder(config: Config, env_state_shape: tuple, activation):
     num_channels, width, height = env_state_shape
 
     num_outputs = width * height * config.encoder_layer_size
+    num_padding = config.conv_kernel_size // 2
 
     layers = []
     layer_sizes = [num_channels] + [config.encoder_layer_size] * config.num_encoder_layers
@@ -191,8 +191,8 @@ def _build_conv_encoder(config: Config, env_state_shape: tuple, activation):
                           bias=True,
                           kernel_size=config.conv_kernel_size,
                           stride=1,
-                          padding=0, padding_mode='zeros')
-        _initialize_weights(layer, config.activation_function)
+                          padding=num_padding, padding_mode='zeros')
+        _initialize_weights(layer, config.activation)
         layers.append(layer)
 
         if config.batch_norm:  # TODO activation before batch norm?

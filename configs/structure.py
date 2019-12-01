@@ -83,6 +83,8 @@ class Config:
     # Winrate for one side to kick in intervention tactics (1.0 to disable)
     winrate_threshold: float = 1
 
+    first_no_adjustment: int = 0  # how many iterations to ignore adjusting (zero to disable)
+
     adjust_lr_to: float = None
     adjust_mi_to: float = None
     adjust_uniform_to: float = None
@@ -95,7 +97,7 @@ class Config:
     # Whether to treat encoder output as mean and variance and sample from it
     variational: bool = False
 
-    activation_function: str = 'relu'  # leaky_relu | relu | tanh
+    activation: str = 'relu'  # leaky_relu | relu | tanh
 
     num_encoder_layers: int = 2
     encoder_layer_size: int = 32
@@ -115,6 +117,8 @@ class Config:
     """ Running """
     # Random seed
     seed: int = 0
+
+    max_run_time: float = .5  # in hours, set to 9999 to disable
 
     # Number of model updates
     num_iterations: int = 60
@@ -171,8 +175,19 @@ class Config:
 
 def read_config(config_path: str) -> Config:
     with open(config_path) as f:
-        dict_obj = json.load(f)
-    config = Config(**dict_obj)
+        raw_dict = json.load(f)
+
+    fields = Config.__dict__
+    parsed_dict = {}
+    for k, v in raw_dict.items():
+        # Example: lr=.1 -> lr_values=[.1], lr_milestones=[0]
+        if k not in fields and k + '_values' in fields:
+            parsed_dict[k + '_values'] = [v]
+            parsed_dict[k + '_milestones'] = [0]
+        else:
+            parsed_dict[k] = v
+
+    config = Config(**parsed_dict)
 
     if config.gae_lambda > 0:
         assert config.algorithm == 'ppo',  'GAE defined only for PPO'
@@ -182,6 +197,8 @@ def read_config(config_path: str) -> Config:
 
     if config.multi_step > 1 or config.memory_size:
         assert config.algorithm == 'sac'
+
+    assert config.conv_kernel_size % 2 == 1, 'Kernel size must be an odd number'
 
     return config
 

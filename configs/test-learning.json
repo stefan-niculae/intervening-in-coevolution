@@ -9,7 +9,7 @@
 
   "encoder_layer_size": 32,
   "num_encoder_layers": 2,
-  "activation_function": "tanh",
+  "activation": "tanh",
 
   "num_iterations": 50,
   "num_transitions": 2000,
