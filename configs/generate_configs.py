@@ -18,7 +18,7 @@ fixed_params = {
     'batch_norm': True,
     'layer_norm': True,
 
-    'max_run_time': 1,
+    'max_run_time': 5,
     'num_iterations': 250,
     'num_transitions': 4000,
     'batch_size': 512,
@@ -111,7 +111,7 @@ if __name__ == '__main__':
         root_dir = DEFAULT_ROOT_DIR
 
     fixed_name = comb_name(fixed_params)
-    output_dir = root_dir + '/' + fixed_name
+    output_dir = root_dir #+ '/' + fixed_name
     makedirs(output_dir, exist_ok=True)
 
     for i, comb in enumerate(carthesian_product(param_grid)):
