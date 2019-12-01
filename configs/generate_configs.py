@@ -18,6 +18,7 @@ fixed_params = {
     'batch_norm': True,
     'layer_norm': True,
 
+    'max_run_time': 1,
     'num_iterations': 250,
     'num_transitions': 4000,
     'batch_size': 512,
