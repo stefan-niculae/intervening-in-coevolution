@@ -15,11 +15,11 @@ from environment.thieves_guardians_env import (
 
 CELL_TYPES = [T, G, E, W, S]  # must increment from zero
 TYPE_COLORS = {
-    E: 'lightgrey',
-    W: 'dimgrey',
-    T: '#FFCC00',  # USC cardinal
-    G: 'tab:cyan',
-    S: '#2774AE',  # UCLA blue
+    E: '#e5e5e5',  # light grey
+    W: '#949494',  # darker grey
+    T: '#990000',  # USC cardinal
+    G: '#2774AE',  # UCLA blue
+    S: '#FFBF00',  # gold
 }
 TYPE_NAMES = {
     E: 'Empty',
