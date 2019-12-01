@@ -10,7 +10,7 @@ from configs.structure import read_config
 DEFAULT_ROOT_DIR = 'generated'
 
 fixed_params = {
-    'scenario': '9x9,1v1,pacman-1',
+    'scenario': '9x9,2v3,pacman-1',
     'time_limit': 60,
     'seed': 0,
 
@@ -73,13 +73,13 @@ def carthesian_product(d):
             yield d
 
 
-def comb_name(comb: dict, only_values=('algorithm', 'architecture', 'activation', 'scenario')) -> str:
+def comb_name(comb: dict,
+              only_values=('algorithm', 'architecture', 'activation', 'scenario'),
+              remove_from_key=('num_', '_interval', '_size', 'conv_')) -> str:
     d = {}
     for k, v in comb.items():
-        k = k.replace('num_', '')
-        k = k.replace('_interval', '')
-        k = k.replace('_size', '')
-        k = k.replace('conv_', '')
+        for to_remove in remove_from_key:
+            k = k.replace(to_remove, '')
 
         if v is True:
             v = 'T'
