@@ -1,4 +1,5 @@
 from sys import argv
+from copy import deepcopy
 import itertools
 import json
 from os import makedirs
@@ -13,6 +14,9 @@ fixed_params = {
     'time_limit': 60,
     'seed': 0,
 
+    'batch_norm': True,
+    'layer_norm': True,
+
     'num_iterations': 200,
     'num_transitions': 3000,
     'batch_size': 512,
@@ -26,6 +30,7 @@ fixed_params = {
 param_grid = {
     'algorithm':    ['pg', 'ppo'],
     'architecture': ['grid→conv', 'coords→fc'],
+    'conv_kernel_size': [None, 1, 3],
     'activation':   ['relu', 'tanh'],
     'encoder':      ['small', 'medium', 'large'],
     'decoder':      ['small', 'large'],
@@ -50,11 +55,22 @@ translator = {
 }
 
 
+def is_valid(d: dict):
+    specifies_kernel = 'conv_kernel_size' in d
+    is_convolutional = 'conv' in d['architecture']
+    return specifies_kernel == is_convolutional
+
+
 def carthesian_product(d):
     keys = d.keys()
     vals = d.values()
     for instance in itertools.product(*vals):
-        yield dict(zip(keys, instance))
+        d = dict(zip(keys, instance))
+        for k, v in deepcopy(d).items():
+            if v is None:
+                del d[k]
+        if is_valid(d):
+            yield d
 
 
 def comb_name(comb: dict, only_values=('algorithm', 'architecture', 'activation', 'scenario')) -> str:
@@ -62,6 +78,14 @@ def comb_name(comb: dict, only_values=('algorithm', 'architecture', 'activation'
     for k, v in comb.items():
         k = k.replace('num_', '')
         k = k.replace('_interval', '')
+        k = k.replace('_size', '')
+        k = k.replace('conv_', '')
+
+        if v is True:
+            v = 'T'
+        elif v is False:
+            v = 'F'
+
         d[k] = v
     return '; '.join(str(v) if k in only_values else f'{k}={v}'
                      for k, v in d.items())
@@ -98,3 +122,5 @@ if __name__ == '__main__':
 
         # Check that it can be read successfully
         read_config(path)
+
+    print(f'Generated {i} configs')
