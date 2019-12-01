@@ -38,6 +38,8 @@ fixed_params = {
     'log_interval': 1,
     'save_interval': 50,
     'eval_interval': 0,
+
+    'first_no_adjustment': 25,
 }
 
 translator = {}
@@ -48,7 +50,7 @@ param_grid = {
     'adjust_lr_to': [None, 0, 0.0001],
     'adjust_mi_to': [None, 1, .25],
     'adjust_uniform_to': [None, .25, .66],
-    'adjust_scripted_to': [None, .25, .66],  # TODO!!! for the loser
+    'adjust_scripted_to': [None, .25, .66],
 }
 
 

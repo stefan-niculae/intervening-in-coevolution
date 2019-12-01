@@ -83,6 +83,8 @@ class Config:
     # Winrate for one side to kick in intervention tactics (1.0 to disable)
     winrate_threshold: float = 1
 
+    first_no_adjustment: int = 0  # how many iterations to ignore adjusting (zero to disable)
+
     adjust_lr_to: float = None
     adjust_mi_to: float = None
     adjust_uniform_to: float = None

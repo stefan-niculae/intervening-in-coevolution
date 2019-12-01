@@ -53,6 +53,7 @@ class Scheduler:
         self.current_iteration = 0
         self.progress_history = []
         self.winrate_threshold = config.winrate_threshold
+        self.first_no_adjustment = config.first_no_adjustment
 
         self.lr_adjust_value = config.adjust_lr_to
         self.latent_mi_coef_adjust_value = config.adjust_mi_to
@@ -63,6 +64,9 @@ class Scheduler:
         self.progress_history.append(winrate)
         self.current_iteration += 1
 
+        if self.first_no_adjustment != 0 and self.current_iteration < self.first_no_adjustment:
+            return
+
         def _adjust_if_enabled(adjust_value, values_list):
             if adjust_value is not None:
                 values_list[self.current_iteration] = adjust_value
@@ -72,6 +76,7 @@ class Scheduler:
             _adjust_if_enabled(self.lr_adjust_value, self.lrs)
             _adjust_if_enabled(self.latent_mi_coef_adjust_value, self.latent_mi_coefs)
             _adjust_if_enabled(self.uniform_proba_adjust_value, self.uniform_probas)
+        if winrate < 1 - self.winrate_threshold:
             _adjust_if_enabled(self.scripted_proba_adjust_value, self.scripted_probas)
 
     @property
