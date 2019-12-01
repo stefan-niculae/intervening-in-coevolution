@@ -4,7 +4,7 @@ import itertools
 import json
 from os import makedirs
 
-from configs.structure import read_config
+from structure import read_config
 
 
 DEFAULT_ROOT_DIR = 'generated'
