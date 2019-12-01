@@ -10,21 +10,22 @@ from configs.structure import read_config
 DEFAULT_ROOT_DIR = 'generated'
 
 fixed_params = {
-    'scenario': '9x9,2v3,pacman-1',
-    'time_limit': 60,
+    'scenario': '9x9,2v2,pacman-1',
+    'treasure_collection_limit': 2,
+    'time_limit': 100,
     'seed': 0,
 
     'batch_norm': True,
     'layer_norm': True,
 
-    'num_iterations': 200,
-    'num_transitions': 3000,
+    'num_iterations': 250,
+    'num_transitions': 4000,
     'batch_size': 512,
-    'num_epochs': 4,
+    'num_epochs': 5,
 
     'log_interval': 1,
     'save_interval': 50,
-    'eval_interval': 999,
+    'eval_interval': 0,
 }
 
 param_grid = {

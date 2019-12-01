@@ -131,7 +131,7 @@ def _build_linear_decoder(config: Config, input_dim: int, output_dim: int, final
             out_size = in_sizes[i + 1]
         layers.append(nn.Linear(in_size, out_size))
         if config.batch_norm:
-            layers.append(nn.BatchNorm2d(config.encoder_layer_size))
+            layers.append(nn.BatchNorm1d(out_size))
 
     if config.layer_norm:
         layers.append(nn.LayerNorm([output_dim]))
@@ -168,11 +168,11 @@ def _build_linear_encoder(config: Config, env_state_shape: tuple, activation):
         layers.append(layer)
 
         if config.batch_norm:  # TODO activation before batch norm?
-            layers.append(nn.BatchNorm2d(config.encoder_layer_size))
+            layers.append(nn.BatchNorm1d(config.encoder_layer_size))
         layers.append(activation())
 
     if config.layer_norm:
-        layers.append(nn.LayerNorm([num_inputs]))
+        layers.append(nn.LayerNorm([config.encoder_layer_size]))
 
     num_outputs = config.encoder_layer_size
     return num_outputs, nn.Sequential(*layers)
@@ -182,6 +182,7 @@ def _build_conv_encoder(config: Config, env_state_shape: tuple, activation):
     num_channels, width, height = env_state_shape
 
     num_outputs = width * height * config.encoder_layer_size
+    num_padding = config.conv_kernel_size // 2
 
     layers = []
     layer_sizes = [num_channels] + [config.encoder_layer_size] * config.num_encoder_layers
@@ -190,7 +191,7 @@ def _build_conv_encoder(config: Config, env_state_shape: tuple, activation):
                           bias=True,
                           kernel_size=config.conv_kernel_size,
                           stride=1,
-                          padding=0, padding_mode='zeros')
+                          padding=num_padding, padding_mode='zeros')
         _initialize_weights(layer, config.activation)
         layers.append(layer)
 

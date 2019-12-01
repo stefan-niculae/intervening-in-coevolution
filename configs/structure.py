@@ -194,6 +194,8 @@ def read_config(config_path: str) -> Config:
     if config.multi_step > 1 or config.memory_size:
         assert config.algorithm == 'sac'
 
+    assert config.conv_kernel_size % 2 == 1, 'Kernel size must be an odd number'
+
     return config
 
 
