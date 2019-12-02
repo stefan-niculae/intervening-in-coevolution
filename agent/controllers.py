@@ -56,22 +56,26 @@ class RecurrentController(nn.Module):
             self.latent_log_vars = nn.Linear(decoders_inp_dim, decoders_inp_dim)
 
         """ Decoder heads """
+        # if config.algorithm in ['pg', 'ppo', 'sac']:
+        #     self.actor = _build_linear_decoder(config, decoders_inp_dim, num_actions, final_softmax=config.algorithm == 'sac')
+        # if config.algorithm in ['ppo']:
+        #     self.critic = _build_linear_decoder(config, decoders_inp_dim, 1)
         if config.algorithm in ['pg', 'ppo', 'sac']:
-            self.actor = _build_linear_decoder(config, decoders_inp_dim, num_actions, final_softmax=config.algorithm == 'sac')
+            self.actor, _           = _build_linear_decoder(config, decoders_inp_dim, num_actions)
         if config.algorithm in ['ppo']:
-            self.critic = _build_linear_decoder(config, decoders_inp_dim, 1)
-        if config.algorithm in ['sac']:
-            # Takes the minimum out of the two critics to combat over-optimism
-            self.critic_1        = _build_linear_decoder(config, decoders_inp_dim, num_actions)
-            self.critic_2        = _build_linear_decoder(config, decoders_inp_dim, num_actions)
-
-            # Target networks for the two critics to reduce variance
-            self.critic_1_target = _build_linear_decoder(config, decoders_inp_dim, num_actions)
-            self.critic_2_target = _build_linear_decoder(config, decoders_inp_dim, num_actions)
-
-            # They both start at the same point
-            copy_weights(self.critic_1, self.critic_1_target)
-            copy_weights(self.critic_2, self.critic_2_target)
+            self.actor, self.critic = _build_linear_decoder(config, decoders_inp_dim, num_actions)
+        # if config.algorithm in ['sac']:
+        #     # Takes the minimum out of the two critics to combat over-optimism
+        #     self.critic_1        = _build_linear_decoder(config, decoders_inp_dim, num_actions)
+        #     self.critic_2        = _build_linear_decoder(config, decoders_inp_dim, num_actions)
+        #
+        #     # Target networks for the two critics to reduce variance
+        #     self.critic_1_target = _build_linear_decoder(config, decoders_inp_dim, num_actions)
+        #     self.critic_2_target = _build_linear_decoder(config, decoders_inp_dim, num_actions)
+        #
+        #     # They both start at the same point
+        #     copy_weights(self.critic_1, self.critic_1_target)
+        #     copy_weights(self.critic_2, self.critic_2_target)
 
     def encode(self, env_states, rec_h_inp=None, rec_c_inp=None):
         """
@@ -121,21 +125,21 @@ class RecurrentController(nn.Module):
 def _build_linear_decoder(config: Config, input_dim: int, output_dim: int, final_softmax=False):
     activation = ACTIVATION_FUNCTIONS[config.activation]
 
-    fc1 = nn.Linear(input_dim, 64)
-    fc2 = nn.Linear(64, 32)
-    fc3 = nn.Linear(32, output_dim)
+    fc1_common = nn.Linear(input_dim, 64)
+    fc2_common = nn.Linear(64, 32)
+    fc3_actor  = nn.Linear(32, output_dim)
+    fc3_critic = nn.Linear(32, 1)
 
-    _initialize_weights(fc1, config.activation)
-    _initialize_weights(fc2, config.activation)
-    _initialize_weights(fc3, config.activation)
+    _initialize_weights(fc1_common, config.activation)
+    _initialize_weights(fc2_common, config.activation)
+    _initialize_weights(fc3_actor, config.activation)
+    _initialize_weights(fc3_critic, config.activation)
 
-    layers  = [fc1, activation()]
-    if config.batch_norm: layers.append(nn.BatchNorm1d(64))
+    common_layers  = [fc1_common, activation()]
+    if config.batch_norm: common_layers.append(nn.BatchNorm1d(64))
 
-    layers += [fc2, activation()]
-    if config.batch_norm: layers.append(nn.BatchNorm1d(32))
-
-    layers += [fc3, activation()]
+    common_layers += [fc2_common, activation()]
+    if config.batch_norm: common_layers.append(nn.BatchNorm1d(32))
 
     # num_layers = config.num_decoder_layers
     # hidden_size = config.decoder_layer_size
@@ -152,12 +156,15 @@ def _build_linear_decoder(config: Config, input_dim: int, output_dim: int, final
     #         layers.append(nn.BatchNorm1d(out_size))
 
     if config.layer_norm:
-        layers.append(nn.LayerNorm([output_dim]))
+        common_layers.append(nn.LayerNorm([output_dim]))
 
-    if final_softmax:
-        layers.append(nn.Softmax(dim=1))
+    # if final_softmax:
+    #     common_layers.append(nn.Softmax(dim=1))
 
-    return nn.Sequential(*layers)
+    actor_seq  = nn.Sequential(*common_layers, fc3_actor)
+    critic_seq = nn.Sequential(*common_layers, fc3_critic)
+
+    return actor_seq, critic_seq
 
 
 def _initialize_weights(layer, activation_name: str):
