@@ -12,8 +12,8 @@ class Config:
     # Number of steps after which the guardians win: in each step all alive avatars move once
     time_limit: int = 50
 
-    # How many treasure collections make the environment end,
-    # zero to disable, -1 for all
+    # How many treasure collections make the environment end
+    # zero to never end the episode upon treasure collection, -1 to end the episode when all treasures have been collected
     treasure_collection_limit: int = -1
 
     # Whether avatars in each team can chose to do nothing for one timestep
@@ -118,7 +118,7 @@ class Config:
     # Random seed
     seed: int = 0
 
-    max_run_time: float = .5  # in hours, set to 9999 to disable
+    max_run_time: float = 12  # in hours, set to 9999 to disable
 
     # Number of model updates
     num_iterations: int = 60

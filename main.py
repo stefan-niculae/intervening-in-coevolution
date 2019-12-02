@@ -81,7 +81,7 @@ def main(config_path: str):
                 won_statuses, rewards = play_against_others(env, policies, comparison_policies, config.comparison_num_episodes)
                 log_comparisons(won_statuses, rewards, logs_writer, update_number)
 
-                elapsed_time = time() - start_time  # in seconds
+                elapsed_time = start_time - time()  # in seconds
                 elapsed_time /= 60  # in minutes
                 elapsed_time /= 60  # in hours
                 if elapsed_time >= config.max_run_time:

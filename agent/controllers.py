@@ -119,19 +119,37 @@ class RecurrentController(nn.Module):
 
 # TODO unify these builders
 def _build_linear_decoder(config: Config, input_dim: int, output_dim: int, final_softmax=False):
-    num_layers = config.num_decoder_layers
-    hidden_size = config.decoder_layer_size
+    activation = ACTIVATION_FUNCTIONS[config.activation]
 
-    in_sizes = [input_dim] + [hidden_size] * num_layers
-    layers = []
-    for i, in_size in enumerate(in_sizes):
-        if i == len(in_sizes) - 1:
-            out_size = output_dim
-        else:
-            out_size = in_sizes[i + 1]
-        layers.append(nn.Linear(in_size, out_size))
-        if config.batch_norm:
-            layers.append(nn.BatchNorm1d(out_size))
+    fc1 = nn.Linear(input_dim, 64)
+    fc2 = nn.Linear(64, 32)
+    fc3 = nn.Linear(32, output_dim)
+
+    _initialize_weights(fc1, config.activation)
+    _initialize_weights(fc2, config.activation)
+    _initialize_weights(fc3, config.activation)
+
+    layers  = [fc1, activation()]
+    if config.batch_norm: layers.append(nn.BatchNorm1d(64))
+
+    layers += [fc2, activation()]
+    if config.batch_norm: layers.append(nn.BatchNorm1d(32))
+
+    layers += [fc3, activation()]
+
+    # num_layers = config.num_decoder_layers
+    # hidden_size = config.decoder_layer_size
+
+    # in_sizes = [input_dim] + [hidden_size] * num_layers
+    # layers = []
+    # for i, in_size in enumerate(in_sizes):
+    #     if i == len(in_sizes) - 1:
+    #         out_size = output_dim
+    #     else:
+    #         out_size = in_sizes[i + 1]
+    #     layers.append(nn.Linear(in_size, out_size))
+    #     if config.batch_norm:
+    #         layers.append(nn.BatchNorm1d(out_size))
 
     if config.layer_norm:
         layers.append(nn.LayerNorm([output_dim]))
@@ -181,23 +199,42 @@ def _build_linear_encoder(config: Config, env_state_shape: tuple, activation):
 def _build_conv_encoder(config: Config, env_state_shape: tuple, activation):
     num_channels, width, height = env_state_shape
 
-    num_outputs = width * height * config.encoder_layer_size
-    num_padding = config.conv_kernel_size // 2
+    conv1 = nn.Conv2d(num_channels, 8, kernel_size=1)
+    conv2 = nn.Conv2d(8, 16, kernel_size=3)
+    conv3 = nn.Conv2d(16, 16, kernel_size=3)
 
-    layers = []
-    layer_sizes = [num_channels] + [config.encoder_layer_size] * config.num_encoder_layers
-    for layer_size in layer_sizes:
-        layer = nn.Conv2d(layer_size, config.encoder_layer_size,
-                          bias=True,
-                          kernel_size=config.conv_kernel_size,
-                          stride=1,
-                          padding=num_padding, padding_mode='zeros')
-        _initialize_weights(layer, config.activation)
-        layers.append(layer)
+    _initialize_weights(conv1, config.activation)
+    _initialize_weights(conv2, config.activation)
+    _initialize_weights(conv3, config.activation)
 
-        if config.batch_norm:  # TODO activation before batch norm?
-            layers.append(nn.BatchNorm2d(config.encoder_layer_size))
-        layers.append(activation())
+    layers  = [conv1, activation()]
+    if config.batch_norm: layers.append(nn.BatchNorm2d(8))
+
+    layers += [conv2, activation()]
+    if config.batch_norm: layers.append(nn.BatchNorm2d(16))
+
+    layers += [conv3, activation()]
+    if config.batch_norm: layers.append(nn.BatchNorm2d(16))
+
+    num_outputs = 16 * 5 * 5
+
+    # num_outputs = width * height * config.encoder_layer_size
+    # num_padding = config.conv_kernel_size // 2
+    #
+    # layers = []
+    # layer_sizes = [num_channels] + [config.encoder_layer_size] * config.num_encoder_layers
+    # for layer_size in layer_sizes:
+    #     layer = nn.Conv2d(layer_size, config.encoder_layer_size,
+    #                       bias=True,
+    #                       kernel_size=config.conv_kernel_size,
+    #                       stride=1,
+    #                       padding=num_padding, padding_mode='zeros')
+    #     _initialize_weights(layer, config.activation)
+    #     layers.append(layer)
+    #
+    #     if config.batch_norm:  # TODO activation before batch norm?
+    #         layers.append(nn.BatchNorm2d(config.encoder_layer_size))
+    #     layers.append(activation())
 
     layers.append(torch.nn.Flatten())
     if config.layer_norm:
