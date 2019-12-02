@@ -21,22 +21,22 @@ fixed_params = {
     'encoder': 'conv',
     'encoder_layer_size': 'hardcoded',
     'decoder_layer_size': 'hardcoded',
-    'activation': 'leaky_relu',
+    'activation': 'relu',
     'batch_norm': True,
 
-    "entropy_coef_milestones":   [    0,    150,   300,    400],
+    "entropy_coef_milestones":   [    0,    200,   400,    600],
     "entropy_coef_values":       [0.006,  0.003, 0.001, 0.0001],
-    "lr_milestones":             [    0,    200],
+    "lr_milestones":             [    0,    300],
     "lr_values":                 [0.005,  0.001],
     "max_grad_norm": 5,
 
-    "num_iterations": 501,
+    "num_iterations": 701,
     "num_transitions": 4000,
     "batch_size": 512,
     "num_epochs": 8,
 
     "log_interval": 1,
-    "eval_interval": 25,
+    "eval_interval": 50,
     "save_interval": 100,
 
     'first_no_adjustment': 50,

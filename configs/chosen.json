@@ -10,7 +10,7 @@
   "encoder_layer_size": "hardcoded",
   "decoder_layer_size": "hardcoded",
 
-  "activation": "leaky_relu",
+  "activation": "relu",
   "batch_norm": true,
   "layer_norm": false,
 
