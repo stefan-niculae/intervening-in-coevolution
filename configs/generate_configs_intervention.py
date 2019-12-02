@@ -30,7 +30,7 @@ fixed_params = {
     "lr_values":                 [0.005,  0.001],
     "max_grad_norm": 5,
 
-    "num_iterations": 701,
+    "num_iterations": 751,
     "num_transitions": 4000,
     "batch_size": 512,
     "num_epochs": 8,
