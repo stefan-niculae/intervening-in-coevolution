@@ -3,11 +3,10 @@
 from time import time
 from sys import argv
 import warnings
+import re
 
 import torch
-
 from tqdm import tqdm as progress_bar
-
 with warnings.catch_warnings():
     # Silence tensorflow (2.0) deprecated usages of numpy
     warnings.simplefilter('ignore', FutureWarning)
@@ -23,7 +22,7 @@ from intervening.scheduling import SAMPLE, DETERMINISTIC, SCRIPTED, action_sourc
 from tuning.comparison import read_models, play_against_others
 
 
-def main(config_path: str):
+def main(config_path: str, resume_path=None):
     # Read the experiment configuration
     config = read_config(config_path)
 
@@ -39,6 +38,21 @@ def main(config_path: str):
 
     # Instantiate components
     env, policies, storages = instantiate(config)
+
+    # Resume from given checkpoint
+    if resume_path is not None:
+        policies = torch.load(resume_path)
+
+        # Gather name form "<anything>-123<anything>"
+        start_iteration = int(re.findall('-(\d+)\.tar', resume_path)[0])
+        for policy in policies:
+            policy.scheduler.current_iteration = start_iteration
+            # TODO also save scheduler values when serializing model
+            policy.sync_scheduled_values()
+
+        print(f'Resuming from iteration {start_iteration}')
+    else:
+        start_iteration = 0
 
     if config.viz_scripted_mode:
         [*env_history, end_reason] = simulate_episode(env, policies, SCRIPTED)
@@ -57,7 +71,7 @@ def main(config_path: str):
         start_time = time()
 
         # Main training loop
-        for update_number in progress_bar(range(config.num_iterations), 'Training'):
+        for update_number in progress_bar(range(start_iteration, config.num_iterations), 'Training'):
             # Collect rollouts and update weights
             training_history = perform_update(config, env, policies, storages)
 
@@ -115,4 +129,9 @@ def main(config_path: str):
 
 
 if __name__ == "__main__":
-    main(argv[1])
+    config_path = argv[1]
+    if len(argv) > 2:
+        resume_path = argv[2]
+    else:
+        resume_path = None
+    main(config_path, resume_path)
