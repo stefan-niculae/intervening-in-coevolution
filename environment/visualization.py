@@ -35,10 +35,6 @@ FPS = 2
 DPI = 80
 
 
-for _ in range(2):
-    plt.rcParams.update({'font.size': 25})  # due to a bug this needs to be ran twice
-
-
 def plot_instance(args: tuple):
     ax, cmap, norm, step, map, pos2id, reward, action = args
 
@@ -78,6 +74,9 @@ def plot_instance(args: tuple):
 
 
 def create_animation(history: tuple, save_path: str):
+    for _ in range(2):
+        plt.rcParams.update({'font.size': 25})  # due to a bug this needs to be ran twice
+
     maps, pos2ids, rewards, actions = history
 
     fig, ax = plt.subplots()

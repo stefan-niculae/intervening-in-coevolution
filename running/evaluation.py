@@ -93,13 +93,23 @@ def simulate_episode(env: TGEnv, team_policies: List[Policy], sampling_method):
     return map_history, pos2id_history, rewards_history, actions_history, infos['end_reason']
 
 
-def record_match(videos_dir: str, env: TGEnv, all_policies: List, all_names: List[str], selected_policy_names: [str, str], n_sampling=3):
+def record_match(videos_dir: str, env: TGEnv, all_policies: List, all_names: List[str],
+                 selected_thief_name: str, selected_guard_name: str,
+                 deterministic=False, n_sampling=2):
+
     os.makedirs(videos_dir, exist_ok=True)
 
-    thief_idx = all_names.index(selected_policy_names[THIEF])
-    guard_idx = all_names.index(selected_policy_names[GUARDIAN])
+    if selected_thief_name == 'scripted':
+        thief_idx = 0
+    else:
+        thief_idx = all_names.index(selected_thief_name)
 
-    match_name = f'Thief({all_names[thief_idx]}) vs Guard({all_names[guard_idx]})'
+    if selected_guard_name == 'scripted':
+        guard_idx = 0
+    else:
+        guard_idx = all_names.index(selected_guard_name)
+
+    match_name = f'T({selected_thief_name[:3]}) vs G({selected_guard_name[:3]})'
 
     selected_policies = [
         all_policies[thief_idx][THIEF],
@@ -107,11 +117,18 @@ def record_match(videos_dir: str, env: TGEnv, all_policies: List, all_names: Lis
     ]
 
     def _run_and_save(sampling_method: int, name_suffix: str):
+        sampling_method = [sampling_method] * 2
+        if selected_thief_name == 'scripted':
+            sampling_method[0] = SCRIPTED
+        if selected_guard_name == 'scripted':
+            sampling_method[1] = SCRIPTED
+
         [*env_history, _] = simulate_episode(env, selected_policies, sampling_method)
         video_path = f'{videos_dir}/{match_name} {name_suffix}.gif'
         create_animation(env_history, video_path)
         print('Saved', video_path)
 
-    _run_and_save(DETERMINISTIC, 'deterministic')
+    if deterministic:
+        _run_and_save(DETERMINISTIC, 'deterministic')
     for i in range(n_sampling):
         _run_and_save(SAMPLE, f'sample {i}')
