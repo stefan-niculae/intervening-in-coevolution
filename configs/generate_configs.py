@@ -125,4 +125,4 @@ if __name__ == '__main__':
         # Check that it can be read successfully
         read_config(path)
 
-    print(f'Generated {i} configs')
+    print(f'Generated {i+1} configs')

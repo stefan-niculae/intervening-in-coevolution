@@ -37,7 +37,7 @@ fixed_params = {
     "num_epochs": 8,
 
     "log_interval": 5,
-    "eval_interval": -1,
+    "eval_interval": 0,
     "save_interval": 25,
 
     'first_no_adjustment': 50,
@@ -139,4 +139,4 @@ if __name__ == '__main__':
         # Check that it can be read successfully
         read_config(path)
 
-    print(f'Generated {i} configs')
+    print(f'Generated {i+1} configs')
