@@ -7,7 +7,7 @@ from os import makedirs
 from configs.structure import read_config
 
 
-DEFAULT_ROOT_DIR = 'intervention-comparison'
+DEFAULT_ROOT_DIR = 'intervention-tests'
 
 fixed_params = {
     'scenario': '9x9,2v2,pacman-1',
@@ -36,11 +36,11 @@ fixed_params = {
     "batch_size": 512,
     "num_epochs": 8,
 
-    "log_interval": 5,
+    "log_interval": 1,
     "eval_interval": 0,
     "save_interval": 25,
 
-    'first_no_adjustment': 50,
+    'first_no_adjustment': 10,
 }
 
 translator = {}
