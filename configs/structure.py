@@ -118,7 +118,7 @@ class Config:
     # Random seed
     seed: int = 0
 
-    max_run_time: float = 12  # in hours, set to 9999 to disable
+    max_run_time: float = 999  # in hours, set to 9999 to disable
 
     # Number of model updates
     num_iterations: int = 60
