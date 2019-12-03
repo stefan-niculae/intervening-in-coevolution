@@ -33,7 +33,7 @@ def make_schedule(milestones: List[int], values: List[float], num_iterations: in
             change_point_idx += 1
         iteration2value[i] = values[change_point_idx]
 
-    return np.array(iteration2value)
+    return np.array(iteration2value, float)
 
 
 class Scheduler:
