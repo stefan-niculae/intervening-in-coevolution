@@ -12,10 +12,10 @@ DEFAULT_ROOT_DIR = 'intervention-comparison'
 fixed_params = {
     'scenario': '9x9,2v2,pacman-1',
     "treasure_collection_limit": 2,
-    'time_limit': 80,
+    'time_limit': 100,
 
-    'algorithm': 'ppo',
-    "discount": 0.96,
+    'algorithm': 'pg',
+    "discount": 0.98,
 
     'state_representation': 'grid',
     'encoder': 'conv',
@@ -23,21 +23,22 @@ fixed_params = {
     'decoder_layer_size': 'hardcoded',
     'activation': 'relu',
     'batch_norm': True,
+    'layer_norm': False,
 
-    "entropy_coef_milestones":   [    0,    200,   400,    600],
-    "entropy_coef_values":       [0.006,  0.003, 0.001, 0.0001],
-    "lr_milestones":             [    0,    300],
+    "entropy_coef_milestones":   [   0,    150,   300],
+    "entropy_coef_values":       [0.01,  0.005, 0.001],
+    "lr_milestones":             [    0,    200],
     "lr_values":                 [0.005,  0.001],
     "max_grad_norm": 5,
 
-    "num_iterations": 751,
+    "num_iterations": 901,
     "num_transitions": 4000,
     "batch_size": 512,
     "num_epochs": 8,
 
-    "log_interval": 1,
-    "eval_interval": 50,
-    "save_interval": 100,
+    "log_interval": 5,
+    "eval_interval": -1,
+    "save_interval": 25,
 
     'first_no_adjustment': 50,
 }
