@@ -14,11 +14,19 @@ from intervening.scheduling import SAMPLE, SCRIPTED
 from running.evaluation import simulate_episode
 
 
-def read_models(models_dir='comparison_models'):
+def read_models(models_dir='comparison_models', skip_start=0, skip_end=4):
     models_dir = Path(models_dir)
-    model_files = listdir(models_dir)
-    all_policies = [torch.load(models_dir / filename) for filename in model_files]
-    return all_policies, model_files
+
+    names = []
+    models = []
+    for filename in listdir(models_dir):
+        if not filename.endswith('.tar'):
+            continue
+
+        models.append(torch.load(models_dir / filename))
+        names.append(filename[skip_start : -skip_end])
+
+    return models, names
 
 
 def play_against_others(env: TGEnv, candidate_policies, other_policies, num_episodes: int):

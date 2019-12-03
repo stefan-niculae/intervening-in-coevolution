@@ -1,13 +1,14 @@
+import os
+from typing import List
+from copy import copy
 import torch
 import numpy as np
 
-from typing import List
-from copy import copy
-
-from environment.thieves_guardians_env import TGEnv, ACTION_IDX2SYMBOL, DEAD
+from environment.thieves_guardians_env import TGEnv, ACTION_IDX2SYMBOL, DEAD, THIEF, GUARDIAN
 from agent.policies import Policy
 from running.training import _get_initial_recurrent_state
-from intervening.scheduling import SCRIPTED
+from intervening.scheduling import SCRIPTED, DETERMINISTIC, SAMPLE
+from environment.visualization import create_animation
 
 
 def simulate_episode(env: TGEnv, team_policies: List[Policy], sampling_method):
@@ -90,3 +91,27 @@ def simulate_episode(env: TGEnv, team_policies: List[Policy], sampling_method):
     actions_history.append([ACTION_IDX2SYMBOL[DEAD]] * env.num_avatars)
 
     return map_history, pos2id_history, rewards_history, actions_history, infos['end_reason']
+
+
+def record_match(videos_dir: str, env: TGEnv, all_policies: List, all_names: List[str], selected_policy_names: [str, str], n_sampling=3):
+    os.makedirs(videos_dir, exist_ok=True)
+
+    thief_idx = all_names.index(selected_policy_names[THIEF])
+    guard_idx = all_names.index(selected_policy_names[GUARDIAN])
+
+    match_name = f'Thief({all_names[thief_idx]}) vs Guard({all_names[guard_idx]})'
+
+    selected_policies = [
+        all_policies[thief_idx][THIEF],
+        all_policies[guard_idx][GUARDIAN]
+    ]
+
+    def _run_and_save(sampling_method: int, name_suffix: str):
+        [*env_history, _] = simulate_episode(env, selected_policies, sampling_method)
+        video_path = f'{videos_dir}/{match_name} {name_suffix}.gif'
+        create_animation(env_history, video_path)
+        print('Saved', video_path)
+
+    _run_and_save(DETERMINISTIC, 'deterministic')
+    for i in range(n_sampling):
+        _run_and_save(SAMPLE, f'sample {i}')
