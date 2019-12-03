@@ -25,9 +25,7 @@ class Policy(ABC):
         self.controller = RecurrentController(config, env_state_shape, num_actions)
         if config.variational:
             self.variational_coef = self.scheduler.current_variational_coef
-        self.constrain_latent = config.constrain_latent
-        if self.constrain_latent:
-            self.latent_mi_coef = self.scheduler.current_latent_mi_coef
+        self.latent_mi_coef = self.scheduler.current_latent_mi_coef
 
         # Optimizer setup
         self.max_grad_norm = config.max_grad_norm
@@ -73,7 +71,7 @@ class Policy(ABC):
         return self.variational_coef * l
 
     def _latent_loss(self, input_features, latent_representation, losses_dict) -> float:
-        if not self.constrain_latent:
+        if self.latent_mi_coef == 0:
             return 0
 
         l = pmf_mi(input_features, latent_representation).sum()
@@ -156,8 +154,7 @@ class Policy(ABC):
     def sync_scheduled_values(self) -> dict:
         if self.controller.variational:
             self.variational_coef = self.scheduler.current_entropy_coef
-        if self.constrain_latent:
-            self.latent_mi_coef = self.scheduler.current_latent_mi_coef
+        self.latent_mi_coef = self.scheduler.current_latent_mi_coef
 
         # Set learning rate to the optimizer for each component
         for optimizer in self.optimizers.values():

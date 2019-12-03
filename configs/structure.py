@@ -75,8 +75,6 @@ class Config:
     variational_constraint_milestones: List[int]   = (0,)
     variational_constraint_values:     List[float] = (0,)
 
-    constrain_latent: bool = False
-
     latent_constraint_milestones: List[int]   = (0,)
     latent_constraint_values:     List[float] = (0,)
 
