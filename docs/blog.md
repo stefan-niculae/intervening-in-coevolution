@@ -14,7 +14,7 @@ Resources:
 
 ## Summary
 
-
+![img](https://lh4.googleusercontent.com/KZFpL1XyzhfidWppyv2mGJ7uaeM2wpn0nQddljyschflEMKzqMQYDT881mSOC8DcKaTV91KSddxlQLZzrmvouu45G3TwrmAPuXGnNUwmQ1K0ui9S5cr4al2KHcPQac0d0S4bQMd9w1g)
 
 ## 1 Introduction
 
@@ -278,3 +278,7 @@ It can be more descriptive to train a World Model [12] on episodes of balanced o
 | FC1 size                      | 64          |
 | FC2 size                      | 32          |
 | Activation function           | ReLU        |
+
+### Tensorboard
+We used tensorboard to control the training. Following is an example used for checking the gradients health:
+![img](https://lh4.googleusercontent.com/5g1MbjHYTbRg6inSWwzb7f_gCMPRtY7imr6fDsot8wY6G1ctAWB4qLWBGKJxq3sjUFTWfBVCHSFUoSzHrp6oF8JnFKrHYHnOQhIKzCyxwXCThtkOr488sksNSA5V7beEZPqiuweTEyI)
