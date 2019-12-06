@@ -43,11 +43,13 @@ We call *balanced co-evolution* a training instance in which both sides display 
 We set out to test two hypotheses
 
 1. Models that co-evolve in a balanced way develop ultimately better absolute skill;
-2. Co-evolution can be balanced by intervening at when relative performance becomes unbalanced.
+2. Co-evolution can be balanced by intervening when relative performance becomes unbalanced.
 
 ## 2 Setup
 
 We test our hypotheses in a RL setting.
+
+> desc
 
 ### 2.1 Environment
 
@@ -69,7 +71,9 @@ The asymmetry of the objectives is a main cause of unbalanced co-evolution.
 
 ![img](https://lh5.googleusercontent.com/zdStsQuh5KJIMe4LVsrFpEvx_U2FU0VwYbMOGWHExg-l4aSor3u6flgLqWN3Lb60RvK66eDtQ1_Te-Zz8d9ST6iTs7lfrYlesuqG65v4mUabgLSIFAx-wF0GDZP3NGqtlSCIjl17fdk)
 
-Each agent receives a different view of environment state. The state features are made up of five 9 by 9 boolean matrices, indicating the positions of:
+There are two agents, one for the thieves and one for the guardians. An agent picks an action for each avatar in the team in isolation. Each agent has their own copy of the model, to prevent intervention cross-contamination. Each avatar has their own transitions buffer, to facilitate dealing with cases in which one thief dies while the game continues.
+
+Each avatar receives a different view of environment state. The state features are made up of five 9 by 9 boolean matrices, indicating the positions of:
 
 1. Itself
 2. Teammates
@@ -79,21 +83,47 @@ Each agent receives a different view of environment state. The state features ar
 
 The entire map is visible to all agents at all times.
 
-A 2D convolution, with 8 filters encodes each one-hot representation of the cell individually (kernel size 1). Two more convolutions encode information about immediate and extended neighbors (kernel size 3). No padding is used in order to drastically reduce the dimensionality of the encoding. The result is the latent representation of the state. It is flattened and passed through a series of fully-connected layers which ultimately branch into actor and critic heads.
+A 2D convolution, with 8 filters encodes each one-hot representation of cells individually (kernel size 1). Two more convolutions encode information about immediate and extended neighbors (kernel size 3). No padding is used in order to drastically reduce the dimensionality of the encoding. The result is the latent representation of the state. It is flattened and passed through a series of fully-connected layers which ultimately branch into actor and critic heads.
 
 ReLU non-linearity and Batch Normalization is applied after each layer (except the final ones). We found that other variations of ReLU do not out-weigh their computational cost. Hyperbolic tangent non-linearities performed worse.
 
 A recurrent component can be added to the latent representation. Despite respecting the Markovian assumption, it significantly improves training performance, but reduces computational one by an order of magnitude, rendering it unfeasible.
 
-The models are trained with a Policy Gradient algorithm, with a discount factor of 0.97. PPO, and SAC (for discrete actions [12]) performed slightly, respectively significantly poorer given the same training time. We suspect this to have been the case because the additional parameters to learn introduce an overhead which brings no additional benefit in the relatively short training sessions.
+The models are trained with a Policy Gradient algorithm, with a discount factor of 0.97. PPO, and SAC (for discrete actions [12]) performed slightly, respectively significantly worse given the same training time. We suspect this to have been the case because the additional parameters to learn introduce an overhead which brings no additional benefit in the relatively short training sessions.
 
-There are two agents, one for the thieves and one for the guardians. An agent picks an action for each avatar in the team in isolation. Each agent has their own copy of the model, to prevent intervention cross-contamination. Each avatar has their own transitions buffer, to facilitate dealing with cases in which one thief dies while the game continues.
+A (normalized) coordinates-based state representation (in which convolutional layers are replaced with fully-connected ones) failed to converge to any meaningful policies.
+
+Deeper and/or wider (larger layer sizes), even though they have more expressive power, would have required much longer training which rendered them impractical for our constrains.
 
 ### 2.3 Intervention
 
+We use the relative win-rate of the previous policy iteration (around a hundred episodes) to gauge the relative performance of thieves and agents. If the win-rate is not within a target range, for the next iteration one of four intervention tactics will be applied.
 
+When the win-rate dips too low, we provide some exploration guidance to the losing side. We observed that in this case, the team's policy degenerates into a sequence of null actions, likely due to the fact that they never managed to discover sources of positive rewards. In this case, providing them with a successful trajectory would increase the chances of that the agent explores and exploits similar trajectories in the future. At each time-step, x% of the time, we force the agent to take a step in the direction of their objective (either a treasure or a goal), instead of sampling from their regular action distribution. Well trained models out-maneuver this fixed strategy, but its purpose is not to be optimal, rather help in cases where one side is severely lacking.
 
+In contrast, when one side wins too often we want to impede their evolution, in order for the loser to catch up. We address this by either:
 
+1. Halting the winner's training, allowing the loser to continue learning and giving them time to study their opponents better;
+2. Constraining the winner's quality of the latent representation, as a non-intrusive way of regularizing the its prowess;
+3. Degrading the policy by making the winner pick actions uniformly x% of the time rather than their learned policy. This is equivalent to $\epsilon$-greedy exploration which can backfire as a technique to help the winner in the long term.
+
+Constraining the latent representation is a deceivingly complex operation. Since it is nearly entirely dependent on the input features (bar the bias terms), ensuring the latent representation does not encode too much information about the raw features would be a good formulation. Due to their significantly different structures, it is extremely non-trivial to measure non-linear correlations between two arbitrary sets of values, of different sizes, with no particular prior distribution in which most of the information is encoded by the number positions rather their magnitudes [?, ?]. To address this, we take a slide a gaussian kernel across all values, to produce a differentiable soft-histogram which can be discretized. We are looking for a measure similar to Mutual Information, which is formulated as follows for discrete distribution PMFs:
+$$
+\text I(X; Y) = \sum_{y}\sum_x p_{X,Y}(x, y) \log \frac {p_{X,Y}(x, y)} {p_X(x) p_Y(y)}
+$$
+We can have $p_X(x)$ and $p_Y(y)$ straight from the PMF, but the joint distribution makes little sense since there is no immediate pairing between value buckets of the raw and latent state representation. We then turn our attention to a related measure, cross entropy, which is formulated as follows for discrete distribution PMFs:
+$$
+\text H(p, q) = - \sum_x p(x) \log q(x)
+$$
+We purposefully forgo the assumption of the same support, by discretizing the PMF of inputs and latent values between their minimum and maximum values. This quantity serves as an indication of how good of an encoding $q$ is for events encoded by $p$. Events in this case are soft-histogram magnitudes. Since our hand-crafted encoding is obviously not optimal, encoding the input as it is also has a cost itself, so we normalize by subtracting $\text H(p, p)$, which is precisely its entropy. Thus, the latent loss is formulated as:
+$$
+\mathcal L_{\text{latent}} = \text H(i, l) - \text H(i, i)
+$$
+where $i$ and $l$ represent the discretized soft-histograms of the input and latent features, respectively.
+
+A more theoretically-sound measure could be formulated if the latent representation was variational, representing multi-gaussian means and standard deviations. Then a straightforward Conditional VAE-like loss could be employed to constrain it to a uniform distribution. But this formulation requires a major change in model architecture, by sampling according to encoder (convolutional layers) outputs and constraining the latent distribution to be uniform. This turned out to be a too high of a cost, as such a variational architecture failed to converge on any meaningful strategy.
+
+We do not explore adding (zero-mean gaussian) noise to the input features or model parameters, in order to avoid the trap of the opponent learning to rely on these artificial weaknesses which would be taken away as soon as they learn how to exploit them successfully.
 
 ### 2.4 Evaluation
 
