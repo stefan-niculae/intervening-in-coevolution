@@ -10,11 +10,15 @@ Resources:
 - [Code repo](https://github.com/stefan-niculae/intervening-in-coevolution)
 - [Presentation](https://docs.google.com/presentation/d/15h6Y2-9z8D5KjHKlFErx_rsckPDSoI42xj4B3SkkwIQ)
 
+> *Note:* gifs cannot be visualized in the PDF version of this report. Access the [online link](https://stefan-niculae.github.io/intervening-in-coevolution/) to see them.
+
 
 
 [TOC]
 
 ## Summary
+
+We explore ways to improve Multi-Agent Reinforcement Learning (MARL) performance. We show that, in a 2D discrete zero-sum game, intervening in the co-evolution process in order to balance the relative win-rate of the two sides trains  ultimately stronger strategies, for at least one side. We explore four intervention techniques: (1) helping the side that gets overpowered by providing exploration guidance, hindering the overpowering side by (2) halting their learning, (3) injecting noise in their policy and (4) constraining the quality of their latent state representation. The most well rounded improvement comes from (1) and (2), while (4) comes with a significant trade-off.
 
 ![img](https://lh4.googleusercontent.com/KZFpL1XyzhfidWppyv2mGJ7uaeM2wpn0nQddljyschflEMKzqMQYDT881mSOC8DcKaTV91KSddxlQLZzrmvouu45G3TwrmAPuXGnNUwmQ1K0ui9S5cr4al2KHcPQac0d0S4bQMd9w1g)
 
@@ -201,10 +205,6 @@ A reason for which the Guide or Noise techniques degraded guardian performance i
 
 We provide a few full episode rollouts for various model pairs, to get a better sense of what behaviors agents are exhibiting.
 
-> *Note:* gifs cannot be visualized in the PDF version of this report. Access the online link to see them.
-
-
-
 **Vanilla vs Vanilla:**
 
 ![img](https://lh5.googleusercontent.com/_4FaidjFQQaIFoFOr0WyiaTIuWr5YH815WTkJypfuFk4nsBW01LVj73WwqNEFj6pmL4D-iDacG6t9ggX1gAHC5GWZ1S0Y06Ajc7tja8fjo2muYCJ1HVw7SURYnrwDnagbvYB1f6zqM4)
@@ -268,9 +268,9 @@ It can be more descriptive to train a World Model [12] on episodes of balanced o
 11. Jaques et al — Social Influence as Intrinsic Motivation for Multi-Agent Deep Reinforcement Learning (2019)
 12. Ha & Schmidhuber — World Models (2018)
 
-## Index
+## Appendix
 
-### Parameters
+### A1 Parameters
 
 - Training
 
@@ -324,6 +324,6 @@ It can be more descriptive to train a World Model [12] on episodes of balanced o
 | FC2 size                      | 32          |
 | Activation function           | ReLU        |
 
-### Tensorboard
-We used tensorboard to control the training. Following is an example used for checking the gradients health:
+### A2 Training diagnostics
+Following is an example used for checking the gradients health:
 ![img](https://lh4.googleusercontent.com/5g1MbjHYTbRg6inSWwzb7f_gCMPRtY7imr6fDsot8wY6G1ctAWB4qLWBGKJxq3sjUFTWfBVCHSFUoSzHrp6oF8JnFKrHYHnOQhIKzCyxwXCThtkOr488sksNSA5V7beEZPqiuweTEyI)
