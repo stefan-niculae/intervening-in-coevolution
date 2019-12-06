@@ -16,7 +16,7 @@ Resources:
 
 ## Summary
 
-
+![img](https://lh4.googleusercontent.com/KZFpL1XyzhfidWppyv2mGJ7uaeM2wpn0nQddljyschflEMKzqMQYDT881mSOC8DcKaTV91KSddxlQLZzrmvouu45G3TwrmAPuXGnNUwmQ1K0ui9S5cr4al2KHcPQac0d0S4bQMd9w1g)
 
 ## 1 Introduction
 
@@ -267,3 +267,63 @@ It can be more descriptive to train a World Model [12] on episodes of balanced o
 10. Christodoulou — Soft Actor-Critic For Discrete Action Settings (2019)
 11. Jaques et al — Social Influence as Intrinsic Motivation for Multi-Agent Deep Reinforcement Learning (2019)
 12. Ha & Schmidhuber — World Models (2018)
+
+## Index
+
+### Parameters
+
+- Training
+
+| Parameter                     |        Value|
+| ----------------------------- | ----------- |
+| Buffer size                   | 4000        |
+| Batch size                    | 512         |
+| Number of epochs              | 8           |
+| Start learning rate           | 0.01        |
+| End learning rate             | 0.001       |
+| Start entropy coefficient     | 0.005       |
+| End entropy coefficient       | 0.001       |
+| Training algorithm            | PG          |
+| Number of iterations          | 4000        |
+| Discount                      | 0.98        |
+| Optimizer                     | Adam        |
+| Adam epsilon                  | 1e-5        |
+| Max gradient norm             | 5           |
+
+
+- Environment
+
+| Parameter                     |        Value|
+| ----------------------------- | ----------- |
+| Maximum number of steps       | 100         |
+| Treasure reward               | 1           |
+| Guardian catches thief reward | 1           |
+| Number of thieves             | 2           |
+| Number of guardians           | 2           |
+
+
+- Encoder Architecture
+
+| Parameter                     |        Value|
+| ----------------------------- | ----------- |
+| Type                          | Convolution |
+| Number of layers              | 3           |
+| Conv1 kernel size             | 1           |
+| Conv1 outputs                 | 8           |
+| Conv2&3 kernel size           | 3           |
+| Conv2&3 outputs               | 32          |
+| Activation function           | ReLU        |
+
+
+- Decoder Architecture
+
+| Parameter                     |        Value|
+| ----------------------------- | ----------- |
+| Type                          | FC          |
+| FC1 size                      | 64          |
+| FC2 size                      | 32          |
+| Activation function           | ReLU        |
+
+### Tensorboard
+We used tensorboard to control the training. Following is an example used for checking the gradients health:
+![img](https://lh4.googleusercontent.com/5g1MbjHYTbRg6inSWwzb7f_gCMPRtY7imr6fDsot8wY6G1ctAWB4qLWBGKJxq3sjUFTWfBVCHSFUoSzHrp6oF8JnFKrHYHnOQhIKzCyxwXCThtkOr488sksNSA5V7beEZPqiuweTEyI)
