@@ -3,6 +3,8 @@
 Stefan Niculae, Alejandro Marin Parra, Daniel Paul Pena, Allen Kim, Abel John
 Team *ASADA*, TA: Karl Pertsch
 
+
+
 Resources:
 
 - [Code repo](https://github.com/stefan-niculae/intervening-in-coevolution)
@@ -24,11 +26,11 @@ This project explores ways to better train agents in an adversarial setting, suc
 
 ### 1.1 Motivation
 
-![img](https://lh3.googleusercontent.com/sVZ0Qaa6kPWK8yAvQ6D5FcN4EGDHwtH4wta3BZZ_qMTk8kz6oep1oq9EpzFmPPc0bT2vJlLTcATbpGWwtrxlrlurQ6mZQ63EjJpYnp_xacLizGE4N0ZM6IF2Cm7PchuNwYYkg3A1di0)
+![img](https://lh6.googleusercontent.com/mUzHCVC6PyYR21Mz6zZCTZwWIFVESsPN5Vu_RsFvO-_8Hr2LXEQjJB_r2q0egrFkWw9sqa6msatipiC9YNtVvV_EPnKZAZ9GQ_Cytqzgt5-pmCKBp8kOova0rcQEoqdTzbF45KgeFxE)
 
 Baker et al. [1] explore how abstract concepts such as tool use can be successfully learned through a physics-based Hide-and-Seek simulation. The hiders learn to use more and more complex strategies, such as blocking passage ways when their opponents become more and more keen at finding them. By developing stronger strategies each side facilitates the other to evolve further and develop stronger counter-strategies to match them. 
 
-![img](https://lh5.googleusercontent.com/q7tGn2d98qcpQ2c3KMST4mVOYo2Km3vJfMgs6YaCkiq7BSI6tG9S2kKELDdeBWfEj53gRAVwH_9sQlWrrciKurMxylY-lZrOwnEUN0Ld0kLw5Ad2SlpawMPERWIjpWrePRoPuN5AFDY)
+ ![img](https://lh4.googleusercontent.com/Wndj_IDetk6nWoaln53ntyl9hpO_QQs3pV1HiodHWbD8I0inqyDBpKo1fXQgS6oyERy-2EhLLUNeFEykAbms_Zep9itFG8WgzZZsP5FZnjghYmR6UFV_dqYqrF0yYVG_P5-J35LXMKQ)
 
 RL models are notoriously hard to train and oftentimes days of training are needed to develop a strategy which is immediately apparent to humans. Paine et al. [2] showed how human demonstrations can be efficiently used (in a DQN-based algorithm) to guide the agent's exploration and point them in the right direction. Complex, sequential tasks are orders of magnitude easier to learn, in which the objectives would have otherwise not been even encountered through random, or heuristic-based exploration.
 
@@ -47,8 +49,8 @@ We call *balanced co-evolution* a training instance in which both sides display 
 
 We set out to test two hypotheses
 
-1. Models that co-evolve in a balanced way develop ultimately better absolute skill;
-2. Co-evolution can be balanced by intervening when relative performance becomes unbalanced.
+1. Co-evolution can be balanced by intervening when relative performance becomes unbalanced;
+2. Models that co-evolve in a balanced way develop ultimately better absolute skill.
 
 ## 2 Setup
 
@@ -102,9 +104,7 @@ Deeper and/or wider (larger layer sizes), even though they have more expressive 
 
 ### 2.3 Intervention
 
-We use the relative win-rate of the previous policy iteration (around a hundred episodes) to gauge the relative performance of thieves and agents. If the win-rate is not within a target range, for the next iteration one of four intervention tactics will be applied.
-
-> pic
+We use the relative win-rate of the previous policy iteration (around a hundred episodes) to gauge the relative performance of thieves and agents. If the win-rate is not within a target range, for the next iteration one of four intervention tactics will be applied. ![img](https://lh6.googleusercontent.com/PhnGpZ8VGFYvTWYjMKgPfP5L7XTSt2vCCNXwtJDuXvZNmmOxRKbxcNLppk4XUy2RI0TTvQEqV52lZ6WI6pd5EHHzsoDGwwNm9eryZX0RTNerHcP9LYB2WBY1jXr82nG3_G4s9pj6cFM)
 
 **Helping the loser** When the win-rate dips too low, we provide some exploration guidance to the losing side. We observed that in this case, the team's policy degenerates into a sequence of null actions, likely due to the fact that they never managed to discover sources of positive rewards. In this case, providing them with a successful trajectory would increase the chances of that the agent explores and exploits similar trajectories in the future. At each time-step, x% of the time, we force the agent to take a step in the direction of their objective (either a treasure or a goal), instead of sampling from their regular action distribution. Well trained models out-maneuver this fixed strategy, but its purpose is not to be optimal, rather help in cases where one side is severely lacking.
 
@@ -136,8 +136,6 @@ This loss is added to the total loss to be optimized, modulated by a coefficient
 
 ### 2.4 Evaluation
 
-> pic
-
 In order to tell whether our proposed intervention techniques improved learning, we need a way to measure the quality of learned policies, i.e.: a measure of absolute skill.
 
 Unlike traditional RL environments, no single episode metric can tell how good a policy is. A high reward can come from playing against weak opponents. A low reward for both can mean that either both sides behave randomly without reaching their objectives, or that both are very skillfully avoiding each-other and displaying cautious behavior. The win-rate against your training opponent only shows how good you are at countering their strategy.
@@ -145,6 +143,8 @@ Unlike traditional RL environments, no single episode metric can tell how good a
 Match-Making Rating (MMR) schemes are not a fit either since Thief A can not directly play against Thief B. They can play the against same opponent, but again, the result only tells how good each of them is at countering that particular opponent's strategy.
 
 The duality of the issue expresses a poses rock-paper-scissors problem. Thief A can do better than Thief B against Guardian X, but worse on Guardian Y. And since there is no direct way to measure the strength of the two Guardian teams, there is no way of translating these results into strength measurements of the two Thief teams.
+
+![img](https://lh3.googleusercontent.com/rUmXKTVNvNI6zVODkTOiWJjr9OiSofWM1Nd6KYW8bFnWXJs9nryA0RnYXCmEcneMbGtUmVfmE2fg3buIrSVrOvnr4e-3ZT8AZx2DBSMkqRmDMSJrTm7_fWfDkvZ3aj8Lxjn7VJpxCis)
 
 **League** A policy is strong if it can beat a variety of opponents. Ideally we would pit it against all possible strategies and see how well it does against them. Practically, we form a *League* of opponents and use the aggregate performance against all of them as a proxy of absolute skill. A thief team plays against all guardian teams for multiple episodes and afterwards their performance is compared to those of all other thief teams. The performance against every opponent is weighed equally. The Wilcoxon test can be employed to validate the statistical difference between these paired measures without a normality assumption.
 
@@ -156,29 +156,76 @@ The duality of the issue expresses a poses rock-paper-scissors problem. Thief A 
 
 ## 3 Results
 
-### H1. Models that co-evolve in a balanced way develop ultimately better absolute skill: True
+In this section we compare the results of applying four intervention tactics:
 
-All intervention techniques caused an absolute skill improvement of the weaker performing agent trained without intervention (vanilla thief) while affecting negatively the best performing non-intervened agent (vanilla guardian).
+1. *Latent*: add $\mathcal L_{\text{latent}}$ to the winner's loss;
+2. *Guide*: show the loser expert demonstrations 50% of the time;
+3. *Freeze*: set the winner's learning rate to zero;
+4. *Noise*: have the winner sample randomly 25% of the time.
+
+Each of these intervention tactics was applied upon when the win-rate diverged past 75%.
+
+In addition, *Vanilla* represents no intervention.
+
+The graphs show the best models after obtained by a non-exhaustive hyper-parameter search. All five variants were trained in the same conditions for roughly the same amount of time. Some tactics, due to being computationally more expensive were able to finish fewer policy iteration steps compared to others.
+
+### 3.1 Balancing relative performance throughout training
+
+Each of the four intervention techniques achieved more balanced training compared to Vanilla:
+
+![img](https://lh5.googleusercontent.com/jp3Y4KytOAnO4Ezw81PlxpckebqkCrYQLDayslXJ2LK9Zu6tmYl4tgjAaIy1AbGgGxSlYnvQa_9sHVKTaMKxB-b3rhnBP_83mx8VL0KntMKXikxA51NPaWcavh41CPfVmqqlbCj9)
+
+The charts show the percentage of episodes the Thief team won against their training Guardian opponents, averaged over 7 policy iteration steps.
+
+Vanilla exhibits the highest unbalance, with a range of almost 75%. The four intervention tactics exhibit lower win-rate oscillation range, as well as having a final win-rate closer to the hypothesized ideal of 50%.
+
+The Latent tactic shows the least oscillation which could be caused by the fact that it is a "smoother" tactic compared to the others. Rather than its effect being turned completely on or completely loss, it impacts the winner's policy in a continuous manner, by applying gradients which minimize $\mathcal L_{\text{latent}}$ .
+
+### 3.2 Improving final League performance
+
+Each of the four intervention techniques trained a stronger thief team compared to Vanilla. Conversely, the strongest guardian team was trained using the Vanilla algorithm.
 
 ![img](https://lh5.googleusercontent.com/aRt68x4rgG0znfyqG_wGMSsNVP7D2eu78QKjtJd0LA8YbHiHmnBFv7izEKZDh3_ORWrcTuuWjrJZARgpP0UJcZZmzB8gH765M8It1YuM7GS3TL81wOsl5gVTjnhXbb-Pmdz0VcVV)
 
-We obtained the largest increase in absolute skill with mutual information constraint (latent), followed by expert demonstrations (guide) and stopping the learning on the winner side (freeze), which all doubled consistently the weaker non-intervened agent performance, whereas noise intervention achieved around fifty increase.
+The chart above shows the performance of the best thief and the best guardian model (different seeds in each case) against a league of 48 opponents (multiple runs and intermediate checkpoints of the five variations).
 
-Latent intervention, although caused the largest improvement on the weaker side, it was also the most detrimental intervention technique on the non-intervened strong agent, dropping its performance around fifty percentage.  
+The Latent thief obtained the strongest performance, very closely followed by the Guide thief and a little less closely followed by the Freeze thief. Their performance across the league is also much more consistent (error bars represent standard deviation across match results) compared to the Noise and Vanilla thieves.
 
-Expert demonstrations and learning rate freezing on the other hand achieved a similar improvement on the weaker side while causing a minimum impact on on the weaker side (decrease of 8 and 4% respectively). 
+The improvement in thief performance by the Latent algorithm comes at stark contrast with the guardian, which obtained much worse performance. This could be indicative of the fact that Latent guardians were good teachers for the Latent thieves, but they did not form too strong of a strategy against the League. This is further reinforced by the relative win-rate curve shown in the previous subsection. The Latent thieves never achieve over 50% win-rate (on average), yet in the League they obtain 87% win-rate, while the guardians, 29%.
 
-The largest decrease in performance on latent intervention can be explained by the negative effect on the stronger side caused by an incomplete state representation, whereas in expert demonstrations and freezing the learning rate, which have a comparable increase in performance on the weaker side while causing minimum impact on the performance on the strong agent, we are not directly affecting the training on the strong side.
+The pervasive nature of the Latent technique effect is a double-edged sword. While it continues to help the loser, it continues to hinder the winner even when $\mathcal L_{\text{latent}}$ is no longer explicitly optimized for. This can also be an explanation of the high drop in guardian performance on compared to Guide and Freeze is likely due to the. Constraining the latent representation has a lasting effect, while  freezing the learning rate or adding noise to the policy is reversed after a while.
 
-We think that one cause of latent intervention to be the best performance technique on the weaker agent is due to the smoothness of the approach: we are changing the learning by introducing a new factor on the loss, which effect we can control with its coefficient. However, expert demonstrations and freezing the learning rate cause an abrupt change on the learning, either by exposing the agents to a totally new behavior or by totally stopping its learning. Therefore, we think that improve the performance of these two techniques by smoothly applying them, for example by eliminating the threshold and make these changes proportional to their deviation from the balance learning or applying a momentum to the value.
+A reason for which the Guide or Noise techniques degraded guardian performance is that when applying them to the winner side, the lower abruptly gets exposed to a vastly different policy, which it has to fit, as its old strategy may not apply on it.
 
-### H2. Co-evolution can be balanced by intervening at when relative performance becomes unbalanced: True
+### 3.3 Qualitative results
 
-We observed that all intervention techniques caused a more balance relative performance measured by the winning rate during the training and specially at the final of the training period. 
+We provide a few full episode rollouts for various model pairs, to get a better sense of what behaviors agents are exhibiting.
 
-In the following graph, which shows the relative average 5 iterations winning rate for agents that co-evolved together, we can observe how the non-intervening training (vanilla) presents the largest oscillation range (almost 75%) during training as well as the lowest winning rate at the end of the training (25%). The intervention techniques applied, on the other hand, not only achieve a balanced relative performance at the end of the training (50 %) but also reduce the range of this oscillations. This is most noticeable in the case of the latent intervention technique, which presents the most smooth curve with a maximum oscillation of 25%. We think that this behavior is caused for the same reason we try to justify to be the best absolute performance technique: it is able to smoothly introduce its effect on the agent through the loss, which impact can be directly controlled by its coefficient.
+> *Note:* gifs cannot be visualized in the PDF version of this report. Access the online link to see them.
 
-![img](https://lh5.googleusercontent.com/jp3Y4KytOAnO4Ezw81PlxpckebqkCrYQLDayslXJ2LK9Zu6tmYl4tgjAaIy1AbGgGxSlYnvQa_9sHVKTaMKxB-b3rhnBP_83mx8VL0KntMKXikxA51NPaWcavh41CPfVmqqlbCj9)
+
+
+**Vanilla vs Vanilla:**
+
+![img](https://lh5.googleusercontent.com/_4FaidjFQQaIFoFOr0WyiaTIuWr5YH815WTkJypfuFk4nsBW01LVj73WwqNEFj6pmL4D-iDacG6t9ggX1gAHC5GWZ1S0Y06Ajc7tja8fjo2muYCJ1HVw7SURYnrwDnagbvYB1f6zqM4)
+
+At step 3, G2 (the Guardian avatar labeled 2) blocks the access of T0 to the treasure at (0, 8) treasure then lures it towards the central one. At step 36, the two guardians manage to corner the last remaining thief.
+
+
+
+**Best thief team (Latent) vs best guardian team (Vanilla):**
+
+![img](https://lh4.googleusercontent.com/hZs3tWADx3SrAznD6ZbPdVnOjcABlkDSQjhS2GetweqMpyhyAztnp5xxic0IVvuXUfx1iBNGeB_lBpSED2bhEw3eZ17yxuNh3z58I3A9tSOA-ONfZgfIxIAA_kzApAgTt9cvJJ7y7-A)
+
+In the first few steps, G3 guesses T1's trajectory wrongly. Starting at step 28, the guardians, who have not fit these particular thief team's strategy enough are too slow to catch T0. Room for refinement on the thief's policy can be observed at step 24. 
+
+
+
+**Failing to generalize a specialized strategy:**
+
+![img](https://lh4.googleusercontent.com/FmdV-5-lplr3swWv-OXUGR-SR5F5_mETumCbOvRxDwCcKr8sqQrMAuqy-wUxrcR2h_x5Usn3VpPvrraDHrfwAE-1B5ao0VIeY4n-Wv1bHWoJNNNYzO3D4dblUDXa9Red9N_MY2CkdTw)
+
+Even though this guardian team learned how to counter their training opponents' strategy very well, their strategy fails to generalize to unseen opponents. At step 9, the guardians block two paths to the treasure, but the thieves just go on alternate routes.
 
 ## 4 Future Work
 
@@ -194,19 +241,17 @@ In the following graph, which shows the relative average 5 iterations winning ra
 
 ![img](https://lh5.googleusercontent.com/w2t5LhG4WsgSU12thkCyIHA-NUDdFW8Z69ghLvqO1I_Hb1RZiTJAS0WW-9g3wAX7-zzJ96UQfC2UJA_PgdAgM7DoOwFypjk77AZ65bt9D8zF8YES39BCkE4FWwW3UHxquxvBv4zyr9k)
 
-**Environment(s)** Larger/more intricate scenarios that facilitate more complex strategies can better showcase intervention impact. Some ways to achieve this can be by allowing diagonal movement, or moving across multiple cells each time-step; or by creating non-euclidean topologies through screen wrap-around or portals. The utility of intervention can be validated by testing on other multi-agent environments as well, such as  Sumo[?] or Soccer[?].
+**Environment(s)** Larger/more intricate scenarios that facilitate more complex strategies can better showcase intervention impact. Some ways to achieve this can be by allowing diagonal movement, or moving across multiple cells each time-step; or by creating non-euclidean topologies through screen wrap-around or portals. The utility of intervention can be validated by testing on other multi-agent environments as well, such as Sumo or Soccer, available as physics-based simulations.
 
 **Learned representations** Besides measuring the quality of the learned policy, it would be interesting to explore the transferability of the built knowledge. Does it scale better (train on a small grid, evaluate on a large one); does it show stronger composability (train on individual tasks such as just avoiding a guardian or just collecting the treasure and evaluate on a scenario involving both at the same time)? The input-format variability can be bypassed by a Transformer-based encoder.
 
 It can be more descriptive to train a World Model [12] on episodes of balanced opponents. Auto-curricula [5] can be optimized for by forcing one team to be a good teacher, rather than achieve their best.
 
-
-
 ## 5 Conclusions
 
-
-
-
+- The proposed intervention tactics greatly improved the performance for one of the teams, while slightly degrading it for the other. 
+- Evaluating the performance of multiple adversarial agents with asymmetric objectives is another hurdle to the exponential complexity of training them.
+- More investigation is needed, as the system exhibits extreme variance w.r.t. changes in the large amount of configuration parameters.
 
 ## References
 
