@@ -4,6 +4,9 @@ Team project for USC course CS-566 _Deep Learning_
 
 [Presentation link](https://docs.google.com/presentation/d/15h6Y2-9z8D5KjHKlFErx_rsckPDSoI42xj4B3SkkwIQ)
 
+[Blog post](https://stefan-niculae.github.io/intervening-in-coevolution)
+
+
 ## Installation
 
 Requires Python 3.7. Tested on MacOS and Windows 
