@@ -52,9 +52,7 @@ We set out to test two hypotheses
 
 ## 2 Setup
 
-We test our hypotheses in a RL setting.
-
-> desc
+We test our hypotheses in a RL setting. This section describes the methodology: environment, agent models, evaluation considerations and intervention criteria and tactics.
 
 ### 2.1 Environment
 
@@ -158,7 +156,29 @@ The duality of the issue expresses a poses rock-paper-scissors problem. Thief A 
 
 ## 3 Results
 
+### H1. Models that co-evolve in a balanced way develop ultimately better absolute skill: True
 
+All intervention techniques caused an absolute skill improvement of the weaker performing agent trained without intervention (vanilla thief) while affecting negatively the best performing non-intervened agent (vanilla guardian).
+
+![img](https://lh5.googleusercontent.com/aRt68x4rgG0znfyqG_wGMSsNVP7D2eu78QKjtJd0LA8YbHiHmnBFv7izEKZDh3_ORWrcTuuWjrJZARgpP0UJcZZmzB8gH765M8It1YuM7GS3TL81wOsl5gVTjnhXbb-Pmdz0VcVV)
+
+We obtained the largest increase in absolute skill with mutual information constraint (latent), followed by expert demonstrations (guide) and stopping the learning on the winner side (freeze), which all doubled consistently the weaker non-intervened agent performance, whereas noise intervention achieved around fifty increase.
+
+Latent intervention, although caused the largest improvement on the weaker side, it was also the most detrimental intervention technique on the non-intervened strong agent, dropping its performance around fifty percentage.  
+
+Expert demonstrations and learning rate freezing on the other hand achieved a similar improvement on the weaker side while causing a minimum impact on on the weaker side (decrease of 8 and 4% respectively). 
+
+The largest decrease in performance on latent intervention can be explained by the negative effect on the stronger side caused by an incomplete state representation, whereas in expert demonstrations and freezing the learning rate, which have a comparable increase in performance on the weaker side while causing minimum impact on the performance on the strong agent, we are not directly affecting the training on the strong side.
+
+We think that one cause of latent intervention to be the best performance technique on the weaker agent is due to the smoothness of the approach: we are changing the learning by introducing a new factor on the loss, which effect we can control with its coefficient. However, expert demonstrations and freezing the learning rate cause an abrupt change on the learning, either by exposing the agents to a totally new behavior or by totally stopping its learning. Therefore, we think that improve the performance of these two techniques by smoothly applying them, for example by eliminating the threshold and make these changes proportional to their deviation from the balance learning or applying a momentum to the value.
+
+### H2. Co-evolution can be balanced by intervening at when relative performance becomes unbalanced: True
+
+We observed that all intervention techniques caused a more balance relative performance measured by the winning rate during the training and specially at the final of the training period. 
+
+In the following graph, which shows the relative average 5 iterations winning rate for agents that co-evolved together, we can observe how the non-intervening training (vanilla) presents the largest oscillation range (almost 75%) during training as well as the lowest winning rate at the end of the training (25%). The intervention techniques applied, on the other hand, not only achieve a balanced relative performance at the end of the training (50 %) but also reduce the range of this oscillations. This is most noticeable in the case of the latent intervention technique, which presents the most smooth curve with a maximum oscillation of 25%. We think that this behavior is caused for the same reason we try to justify to be the best absolute performance technique: it is able to smoothly introduce its effect on the agent through the loss, which impact can be directly controlled by its coefficient.
+
+![img](https://lh5.googleusercontent.com/jp3Y4KytOAnO4Ezw81PlxpckebqkCrYQLDayslXJ2LK9Zu6tmYl4tgjAaIy1AbGgGxSlYnvQa_9sHVKTaMKxB-b3rhnBP_83mx8VL0KntMKXikxA51NPaWcavh41CPfVmqqlbCj9)
 
 ## 4 Future Work
 
